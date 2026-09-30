@@ -1,0 +1,39 @@
+name: Checks
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: twelve
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: twelve_week_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U twelve -d twelve_week_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://twelve:ci_only_password@127.0.0.1:5432/twelve_week_test
+      DATABASE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:api
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure
+          path: test-results

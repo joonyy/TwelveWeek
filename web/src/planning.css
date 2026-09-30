@@ -1,0 +1,780 @@
+.vision-editor {
+  min-width: 0;
+}
+.vision-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.vision-editor h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.format-switch {
+  display: flex;
+  padding: 3px;
+  background: #eef1e8;
+  border-radius: 7px;
+  gap: 2px;
+}
+.format-switch button {
+  border: 0;
+  background: none;
+  color: #889781;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 6px 9px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+.format-switch button[aria-pressed="true"] {
+  color: #416234;
+  background: #fff;
+  box-shadow: 0 1px 4px #213a1420;
+}
+.list-input ol {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.list-input li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #e6ebdf;
+}
+.list-number {
+  font-family: Georgia, serif;
+  font-size: 17px;
+  color: #a0b58a;
+  width: 23px;
+  flex-shrink: 0;
+}
+.list-input input {
+  border: 0;
+  background: transparent;
+  box-shadow: none !important;
+  padding: 10px 0;
+  min-width: 0;
+  font-size: 14px;
+}
+.list-input li:focus-within {
+  border-color: #6f9c54;
+}
+.list-input li > .icon-button {
+  opacity: 0.45;
+}
+.list-input li:hover > .icon-button,
+.list-input li:focus-within > .icon-button {
+  opacity: 1;
+}
+.list-keyboard-hint {
+  display: block;
+  color: #9eaa94;
+  font-size: 10px;
+  margin-top: 12px;
+}
+.vision-editor textarea {
+  font-size: 14px;
+}
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.calendar-legend {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: #7c8a73;
+}
+.calendar-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.calendar-legend > span:before {
+  content: "";
+  height: 8px;
+  width: 8px;
+  border-radius: 2px;
+  background: #9db486;
+}
+.calendar-legend > .buffer:before {
+  background: #a2b7bd;
+}
+.calendar-legend > .breakout:before {
+  background: #d8bd8f;
+}
+.week-calendar {
+  border: 1px solid #dce4d4;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  min-width: 0;
+}
+.calendar-scroll {
+  height: 640px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.calendar-canvas {
+  min-width: 720px;
+}
+.calendar-header,
+.calendar-body {
+  display: grid;
+  grid-template-columns: 74px repeat(7, minmax(0, 1fr));
+}
+.calendar-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fcfdf8;
+  border-bottom: 1px solid #dce4d4;
+  box-shadow: 0 1px 4px #30422008;
+}
+.calendar-header > div {
+  padding: 14px 3px;
+  text-align: center;
+  border-right: 1px solid #ebeee5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.calendar-header strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.calendar-header small {
+  font-size: 10px;
+  color: #90a180;
+}
+.calendar-header .calendar-zone {
+  font-size: 10px;
+  color: #728663;
+  gap: 4px;
+}
+.calendar-zone small {
+  font-size: 8px;
+}
+.calendar-axis {
+  position: relative;
+  background: #fbfcf7;
+  border-right: 1px solid #e3e9db;
+}
+.calendar-axis > span {
+  position: absolute;
+  right: 10px;
+  font-size: 9px;
+  color: #99a68f;
+  transform: translateY(4px);
+  white-space: nowrap;
+}
+.calendar-column {
+  position: relative;
+  border-right: 1px solid #e5eadf;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.calendar-column.weekend {
+  background: #f8faf5;
+}
+.calendar-slot {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-top: 1px dashed #e7ecdf;
+  padding: 0;
+}
+.calendar-slot:nth-child(odd) {
+  border-top: 1px solid #e0e7d8;
+}
+.calendar-slot:hover:not(.passive) {
+  background: #dcebd16b;
+}
+.calendar-slot:not(.passive) {
+  cursor: crosshair;
+}
+.week-calendar.selecting,
+.week-calendar.selecting * {
+  cursor: crosshair !important;
+}
+.calendar-selection {
+  position: absolute;
+  z-index: 4;
+  left: 2px;
+  right: 2px;
+  border: 1px solid #4e7839;
+  border-left: 3px solid #4e7839;
+  border-radius: 5px;
+  background: #bed7a9e8;
+  color: #284d1a;
+  box-shadow: 0 2px 7px #27451518;
+  padding: 4px;
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.calendar-selection strong {
+  font-size: 10px;
+  font-weight: 600;
+}
+.calendar-selection small {
+  font-size: 9px;
+}
+.calendar-slot:focus-visible {
+  outline: 2px solid #8aac70;
+  outline-offset: -2px;
+}
+.calendar-event {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid #adc69a;
+  border-left: 3px solid #799e63;
+  border-radius: 5px;
+  background: #e6efde;
+  color: #42692f;
+  overflow: hidden;
+  padding: 6px 6px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  word-break: keep-all;
+  box-shadow: 0 1px 3px #27451508;
+  line-height: 1.5;
+}
+.calendar-event strong {
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  flex-shrink: 0;
+}
+.calendar-event small {
+  font-size: 9px;
+  opacity: 0.75;
+}
+.calendar-event.buffer {
+  background: #e7eff0;
+  border-color: #b3c8cb;
+  border-left-color: #829fa6;
+  color: #456c75;
+}
+.calendar-event.breakout {
+  background: #f5eedc;
+  border-color: #daccaa;
+  border-left-color: #c5a86d;
+  color: #927333;
+}
+.calendar-event.actual {
+  background: #d4e5c6;
+  border-left-color: #4e7839;
+}
+.calendar-event:disabled {
+  opacity: 1;
+}
+.calendar-event.reference {
+  border-style: dashed;
+  border-width: 1px;
+  opacity: 0.6;
+  box-shadow: none;
+  z-index: 1;
+  pointer-events: none;
+}
+.calendar-event.reference strong {
+  font-size: 10px;
+}
+.calendar-event.continuation {
+  border-top-style: dashed;
+}
+.calendar-event.done {
+  background: #ecf1e6;
+  color: #8d9e7d;
+}
+.calendar-event[draggable="true"] {
+  cursor: grab;
+}
+.calendar-event:active[draggable="true"] {
+  cursor: grabbing;
+}
+.calendar-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f7f9f1;
+  border-top: 1px solid #e2e8da;
+  color: #91a27f;
+  font-size: 10px;
+  flex-wrap: wrap;
+}
+.calendar-footer span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.block-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+.block-dialog-actions .button {
+  margin-left: auto;
+}
+.responsibility-guides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+.responsibility-guides article {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #f7f9f2;
+  border: 1px solid #e7ecdd;
+  border-radius: 8px;
+  padding: 14px 17px;
+}
+.responsibility-guides article > span {
+  color: #a0b485;
+  font:
+    21px Georgia,
+    serif;
+}
+.responsibility-guides p {
+  font-size: 12px;
+  margin: 0;
+  color: #6d815b;
+  word-break: keep-all;
+}
+.responsibility-editor blockquote {
+  margin: 30px 0;
+  padding: 4px 12px;
+  text-align: center;
+  font-size: 17px;
+  color: #67824d;
+  line-height: 1.9;
+  word-break: keep-all;
+}
+.bracket-box {
+  border: 1px solid #c6d6b4;
+  border-top: 3px solid #9cb987;
+  padding: 24px;
+  border-radius: 0 0 9px 9px;
+}
+.bracket-box > h3 {
+  font-size: 17px;
+  text-align: center;
+  color: #517b3f;
+}
+.bracket-box > p {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.bracket-box h4 {
+  font-size: 12px;
+  color: #7d9565;
+  margin: 0 0 10px;
+  font-weight: 500;
+}
+.legacy-note {
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid #e2e8dc;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #849570;
+}
+.legacy-note summary {
+  cursor: pointer;
+}
+.legacy-note textarea {
+  margin-top: 12px;
+}
+.commitment-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 35px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.commitment-instructions h3 {
+  font-size: 26px;
+  line-height: 1.6;
+  letter-spacing: -1px;
+  font-weight: 500;
+}
+.commitment-instructions ol {
+  font-size: 12px;
+  line-height: 1.85;
+  color: #819170;
+  padding-left: 18px;
+}
+.commitment-instructions li {
+  padding-left: 4px;
+  margin-bottom: 10px;
+  word-break: keep-all;
+}
+.commitment-instructions .muted {
+  font-size: 11px;
+  color: #98a28f;
+  margin-top: 20px;
+}
+.wheel-wrap {
+  max-width: 420px;
+  width: 100%;
+  margin: auto;
+  text-align: center;
+}
+.wheel-wrap > small {
+  color: #91a080;
+  font-size: 11px;
+}
+.wheel-wrap svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  display: block;
+}
+.wheel-sector {
+  cursor: pointer;
+  outline: none;
+}
+.wheel-sector path {
+  fill: #f1f5e8;
+  stroke: #a2b88e;
+  stroke-width: 1.4;
+  transition: fill 0.15s;
+}
+.wheel-sector.populated path {
+  fill: #e3ecd6;
+}
+.wheel-sector.selected path {
+  fill: #557b43;
+  stroke: #486f36;
+  stroke-width: 2;
+}
+.wheel-sector:hover path {
+  fill: #d4e2c4;
+}
+.wheel-sector.selected:hover path {
+  fill: #678d51;
+}
+.wheel-sector:focus-visible path {
+  stroke: #1c4324;
+  stroke-width: 4;
+}
+.wheel-sector text {
+  font-size: 14px;
+  fill: #71845b;
+  pointer-events: none;
+  font-weight: 500;
+}
+.wheel-sector.selected text {
+  fill: #fff;
+}
+.wheel-sector circle {
+  fill: #729952;
+  pointer-events: none;
+}
+.wheel-sector.selected circle {
+  fill: #d5e7c2;
+}
+.wheel-center {
+  fill: #fff;
+  stroke: #a8bd95;
+  stroke-width: 1.3;
+  pointer-events: none;
+}
+.wheel-center-label {
+  font-size: 17px;
+  fill: #78915d;
+  pointer-events: none;
+  font-weight: 600;
+}
+.wheel-center-label tspan {
+  font-size: 9px;
+  font-weight: 400;
+}
+.commitment-sheet {
+  background: #fbfcf8;
+  border: 1px solid #d5e0c9;
+  padding: 23px;
+  border-radius: 10px;
+}
+.commitment-sheet > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+.commitment-sheet h3 {
+  font-size: 18px;
+  margin: 0;
+  color: #597844;
+}
+.commitment-sheet .eyebrow {
+  font-size: 9px;
+  margin-bottom: 7px;
+}
+.circle-legend {
+  font-size: 10px;
+  color: #88a071;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+.circle-legend > span {
+  font-size: 23px;
+  color: #719055;
+}
+.commitment-columns,
+.commitment-entry {
+  display: grid;
+  grid-template-columns: 24px 1fr 1fr 1fr 24px;
+  gap: 13px;
+  align-items: start;
+}
+.commitment-columns {
+  font-size: 11px;
+  color: #799360;
+  border-bottom: 1px solid #dee6d5;
+  padding-bottom: 13px;
+}
+.commitment-columns strong {
+  font-weight: 500;
+}
+.commitment-entry {
+  padding: 19px 0;
+  border-bottom: 1px solid #e6ecde;
+}
+.commitment-entry:last-child {
+  border-bottom: 0;
+}
+.commitment-index {
+  font:
+    20px Georgia,
+    serif;
+  color: #a1b78a;
+  margin-top: 13px;
+}
+.commitment-cell {
+  min-width: 0;
+  position: relative;
+}
+.commitment-cell > span {
+  display: none;
+}
+.commitment-cell textarea {
+  border-color: #dce5d2;
+  background: #fff;
+  font-size: 12px;
+  padding: 12px;
+  min-height: 110px;
+}
+.commitment-circle {
+  border: 0;
+  background: none;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 3px 0;
+  font-size: 9px;
+  color: #8ea479;
+}
+.commitment-circle > span {
+  font-size: 21px;
+  line-height: 1;
+}
+.commitment-entry.accepted .core-activity textarea {
+  border: 2px solid #85a96b;
+  border-radius: 42% 48% 40% 47% / 14% 18% 15% 19%;
+  background: #f2f7eb;
+  padding: 11px;
+}
+.commitment-entry.accepted .commitment-circle {
+  color: #5b803e;
+  font-weight: 600;
+}
+.commitment-choice {
+  grid-column: 2/5;
+  font-size: 10px;
+  color: #8a9d78;
+}
+.commitment-choice input {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.commitment-sheet > .text-button {
+  margin-top: 20px;
+}
+.legacy-commitment {
+  margin-top: 15px;
+  padding: 15px;
+  background: white;
+  border: 1px solid #e4e9dd;
+  border-radius: 8px;
+}
+.calendar-schedule-panel {
+  margin: 20px 0 25px;
+}
+@media (max-width: 1000px) {
+  .commitment-top {
+    gap: 18px;
+  }
+  .commitment-instructions h3 {
+    font-size: 23px;
+  }
+  .commitment-instructions ol {
+    font-size: 11px;
+  }
+  .commitment-sheet {
+    padding: 18px;
+  }
+  .commitment-columns,
+  .commitment-entry {
+    gap: 9px;
+    grid-template-columns: 18px 1fr 1fr 1fr 20px;
+  }
+  .responsibility-guides p {
+    font-size: 11px;
+  }
+  .calendar-scroll {
+    height: 580px;
+  }
+}
+@media (max-width: 650px) {
+  .commitment-top {
+    grid-template-columns: 1fr;
+  }
+  .commitment-instructions h3 br {
+    display: none;
+  }
+  .commitment-instructions h3 {
+    font-size: 23px;
+  }
+  .commitment-instructions ol {
+    font-size: 13px;
+  }
+  .commitment-instructions .muted {
+    font-size: 12px;
+  }
+  .wheel-wrap {
+    max-width: 360px;
+  }
+  .commitment-columns {
+    display: none;
+  }
+  .commitment-entry {
+    grid-template-columns: 22px 1fr 22px;
+    gap: 12px;
+    padding: 23px 0;
+  }
+  .commitment-index {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .commitment-cell {
+    grid-column: 2;
+  }
+  .commitment-cell > span {
+    display: block;
+    font-size: 11px;
+    color: #7f946c;
+    margin-bottom: 8px;
+  }
+  .commitment-entry > .icon-button {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .commitment-cell textarea {
+    font-size: 14px;
+    min-height: 85px;
+  }
+  .commitment-choice {
+    grid-column: 2;
+  }
+  .commitment-sheet > header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .responsibility-guides {
+    grid-template-columns: 1fr;
+  }
+  .responsibility-guides p {
+    font-size: 13px;
+  }
+  .responsibility-editor blockquote {
+    font-size: 15px;
+  }
+  .bracket-box {
+    padding: 20px 15px;
+  }
+  .bracket-box > .two-col {
+    gap: 25px;
+  }
+  .calendar-toolbar > .button {
+    font-size: 11px;
+  }
+  .calendar-legend {
+    gap: 10px;
+    font-size: 10px;
+  }
+  .calendar-scroll {
+    height: 540px;
+  }
+  .calendar-canvas {
+    min-width: 740px;
+  }
+  .list-input input {
+    font-size: 14px;
+  }
+  .list-input li {
+    gap: 8px;
+  }
+  .vision-editor {
+    margin-bottom: 20px;
+  }
+  .vision-editor h3 {
+    font-size: 13px;
+  }
+  .format-switch button {
+    padding: 7px 8px;
+  }
+  .calendar-footer {
+    font-size: 9px;
+  }
+  .commitment-sheet h3 {
+    font-size: 16px;
+  }
+  .commitment-circle {
+    font-size: 11px;
+  }
+  .commitment-instructions li {
+    margin-bottom: 8px;
+  }
+}

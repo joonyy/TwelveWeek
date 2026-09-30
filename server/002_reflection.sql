@@ -1,0 +1,1 @@
+ALTER TABLE cycles ADD COLUMN IF NOT EXISTS reflection jsonb NOT NULL DEFAULT '{}';

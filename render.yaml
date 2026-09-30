@@ -1,0 +1,52 @@
+# Link this repository to Render after creating the dedicated Aiven PostgreSQL DB.
+# API origin and frontend origin are supplied in the Render setup screen.
+services:
+  - type: web
+    name: twelve-week-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATABASE_CA_PEM
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: TOKEN_TTL_DAYS
+        value: "365"
+  - type: web
+    name: twelve-week-web
+    runtime: static
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: ./web/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

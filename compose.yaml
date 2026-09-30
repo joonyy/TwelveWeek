@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    ports: ["127.0.0.1:55439:5432"]
+    environment:
+      POSTGRES_USER: twelve
+      POSTGRES_PASSWORD: twelve_local
+      POSTGRES_DB: twelve_week
+    volumes: ["twelve_week_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twelve -d twelve_week"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  twelve_week_pg:

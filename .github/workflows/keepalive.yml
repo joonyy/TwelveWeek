@@ -1,0 +1,18 @@
+name: Optional Render keepalive
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,17,27,37,47,57 * * * *"
+jobs:
+  ping:
+    if: ${{ vars.KEEPALIVE_URLS != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/keepalive.js
+        env:
+          KEEPALIVE_URLS: ${{ vars.KEEPALIVE_URLS }}
