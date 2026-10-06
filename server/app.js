@@ -20,9 +20,14 @@ import {
   scoreWeek,
   scoreDay,
   weekGoals,
+  DEFAULT_WEEK_COUNT,
 } from "../shared/domain.js";
 import { calendar } from "./calendar.js";
-import { hasGoalContent, hasTacticContent } from "../shared/planning.js";
+import {
+  hasGoalContent,
+  hasTacticContent,
+  planWithinWeeks,
+} from "../shared/planning.js";
 const hash = (t) => createHash("sha256").update(t).digest("hex");
 function fail(status, message) {
   throw Object.assign(new Error(message), { status });
@@ -170,7 +175,7 @@ export function createApp({
     res.json(
       (
         await pool.query(
-          "SELECT id,title,start_date,status,version,updated_at FROM cycles WHERE profile_id=$1 ORDER BY created_at DESC",
+          "SELECT id,title,start_date,week_count,status,version,updated_at FROM cycles WHERE profile_id=$1 ORDER BY created_at DESC",
           [req.profile.id],
         )
       ).rows,
@@ -184,18 +189,20 @@ export function createApp({
     });
     if (new Date(`${input.startDate}T00:00:00Z`).getUTCDay() !== 1)
       fail(400, "시작일은 월요일로 선택해주세요.");
+    const weekCount = input.weekCount ?? DEFAULT_WEEK_COUNT;
     res
       .status(201)
       .json(
         (
           await pool.query(
-            "INSERT INTO cycles(id,profile_id,title,start_date,plan) VALUES($1,$2,$3,$4,$5) RETURNING *",
+            "INSERT INTO cycles(id,profile_id,title,start_date,plan,week_count) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
             [
               randomUUID(),
               req.profile.id,
               input.title,
               input.startDate,
-              JSON.stringify(input.plan),
+              JSON.stringify(planWithinWeeks(input.plan, weekCount)),
+              weekCount,
             ],
           )
         ).rows[0],
@@ -215,10 +222,27 @@ export function createApp({
         fail(409, "마친 주기는 기록으로 보관돼요.");
       if (cycle.status === "active" && input.startDate !== cycle.start_date)
         fail(409, "시작한 주기의 날짜는 바꿀 수 없어요.");
+      const weekCount = input.weekCount ?? cycle.week_count;
+      if (cycle.status === "active" && weekCount !== cycle.week_count) {
+        if (weekCount > cycle.week_count)
+          fail(409, "착수 후에는 실행 주수를 줄이는 변경만 가능해요.");
+        if (weekStart(cycle.start_date, weekCount + 1) <= evaluationDate(now()))
+          fail(
+            409,
+            "이미 시작한 주는 기간에서 제외할 수 없어요. 이번 주와 지난주의 기록은 보존됩니다.",
+          );
+      }
+      const plan = planWithinWeeks(input.plan, weekCount);
       const changed = (
         await db.query(
-          "UPDATE cycles SET title=$1,start_date=$2,plan=$3,version=version+1,updated_at=now() WHERE id=$4 RETURNING *",
-          [input.title, input.startDate, JSON.stringify(input.plan), cycle.id],
+          "UPDATE cycles SET title=$1,start_date=$2,plan=$3,week_count=$4,version=version+1,updated_at=now() WHERE id=$5 RETURNING *",
+          [
+            input.title,
+            input.startDate,
+            JSON.stringify(plan),
+            weekCount,
+            cycle.id,
+          ],
         )
       ).rows[0];
       if (cycle.status === "active") {
@@ -229,12 +253,15 @@ export function createApp({
           )
         ).rows;
         for (const w of weeks)
-          if (weekStart(cycle.start_date, w.number) > evaluationDate(now())) {
+          if (
+            w.number <= weekCount &&
+            weekStart(cycle.start_date, w.number) > evaluationDate(now())
+          ) {
             await db.query(
               "UPDATE weeks SET state=$1,version=version+1,updated_at=now() WHERE cycle_id=$2 AND number=$3",
               [
                 JSON.stringify(
-                  prepareWeek(input.plan, cycle.start_date, w.number, w.state),
+                  prepareWeek(plan, cycle.start_date, w.number, w.state),
                 ),
                 cycle.id,
                 w.number,
@@ -246,8 +273,14 @@ export function createApp({
         fromVersion: cycle.version,
         appliesTo: "draft-or-future-weeks",
         before: cycle.plan,
-        after: input.plan,
+        after: plan,
       });
+      if (weekCount !== cycle.week_count)
+        await audit(db, req, cycle, "cycle.length_changed", {
+          fromWeeks: cycle.week_count,
+          toWeeks: weekCount,
+          retainedWeekRecords: true,
+        });
       return changed;
     });
     res.json(result);
@@ -289,7 +322,7 @@ export function createApp({
         )
       )
         fail(400, "목표와 전술, 1회 완료 조건, 실행 주차를 먼저 채워주세요.");
-      for (let number = 1; number <= 12; number++)
+      for (let number = 1; number <= c.week_count; number++)
         await db.query(
           "INSERT INTO weeks(cycle_id,number,state) VALUES($1,$2,$3)",
           [
@@ -298,7 +331,7 @@ export function createApp({
             JSON.stringify(prepareWeek(c.plan, c.start_date, number)),
           ],
         );
-      await audit(db, req, c, "cycle.started", {});
+      await audit(db, req, c, "cycle.started", { weekCount: c.week_count });
       return (
         await db.query(
           "UPDATE cycles SET status='active',version=version+1,updated_at=now() WHERE id=$1 RETURNING *",
@@ -313,9 +346,9 @@ export function createApp({
       const c = await owned(db, req, true);
       if (
         c.status !== "active" ||
-        evaluationDate(now()) < addDays(c.start_date, 84)
+        evaluationDate(now()) < addDays(c.start_date, c.week_count * 7)
       )
-        fail(409, "12주 실행 뒤 회고 주간에 마무리할 수 있어요.");
+        fail(409, `${c.week_count}주 실행 뒤 회고 주간에 마무리할 수 있어요.`);
       return (
         await db.query(
           "UPDATE cycles SET status='complete',version=version+1,updated_at=now() WHERE id=$1 RETURNING *",
@@ -339,7 +372,7 @@ export function createApp({
         const c = await owned(db, req, true);
         version(c.version, input.version);
         if (c.status !== "active")
-          fail(409, "진행 중인 12주의 회고만 수정할 수 있어요.");
+          fail(409, "진행 중인 주기의 회고만 수정할 수 있어요.");
         const reflection = {
           results: input.results,
           lessons: input.lessons,
@@ -365,7 +398,7 @@ export function createApp({
       .number()
       .int()
       .min(1)
-      .max(12)
+      .max(cycle.week_count)
       .parse(req.params.week);
     const week = (
       await db.query(
@@ -373,7 +406,7 @@ export function createApp({
         [cycle.id, number],
       )
     ).rows[0];
-    if (!week) fail(404, "12주 착수 후 주간 계획을 사용할 수 있어요.");
+    if (!week) fail(404, "주기 착수 후 주간 계획을 사용할 수 있어요.");
     return { cycle, week };
   };
   const present = (cycle, week) => ({

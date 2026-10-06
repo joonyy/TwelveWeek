@@ -6,6 +6,8 @@ import {
   hasTacticContent,
 } from "./planning.js";
 export const DEFAULT_START = "2026-10-05";
+export const DEFAULT_WEEK_COUNT = 12;
+export const MAX_WEEK_COUNT = 12;
 export function dateOnly(value) {
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(value) &&
@@ -30,9 +32,13 @@ export function evaluationDate(instant = new Date()) {
 export function weekStart(start, week) {
   return addDays(start, (week - 1) * 7);
 }
-export function currentWeek(start, instant = new Date()) {
+export function currentWeek(
+  start,
+  instant = new Date(),
+  weekCount = DEFAULT_WEEK_COUNT,
+) {
   return Math.min(
-    13,
+    weekCount + 1,
     Math.max(
       0,
       Math.floor(daysBetween(start, evaluationDate(instant)) / 7) + 1,
@@ -44,13 +50,13 @@ export function calendarInstant(date, time) {
     `${Number(time.slice(0, 2)) < 4 ? addDays(date, 1) : date}T${time}:00+09:00`,
   );
 }
-export function emptyPlan() {
+export function emptyPlan(weekCount = DEFAULT_WEEK_COUNT) {
   return {
     longVision: "",
     personalVision: "",
     careerVision: "",
     visionModes: { ...VISION_MODES },
-    goals: Array.from({ length: 3 }, newGoal),
+    goals: Array.from({ length: 3 }, () => newGoal(weekCount)),
     modelWeek: [],
     responsibility: "",
     responsibilityActions: { personal: "", business: "" },

@@ -727,14 +727,19 @@ const wheelLabels = [
   ["비즈니스"],
   ["종교"],
 ];
-export function CommitmentWheel({ entries, onChange, readonly = false }) {
+export function CommitmentWheel({
+  entries,
+  onChange,
+  readonly = false,
+  weekCount = 12,
+}) {
   const [selected, setSelected] = useState("건강");
   const rows = entries.filter((c) => c.area === selected);
   const extras = entries.filter((c) => !COMMITMENT_AREAS.includes(c.area));
   const update = (id, key, value) =>
     onChange(entries.map((c) => (c.id === id ? { ...c, [key]: value } : c)));
   const fields = [
-    ["promise", "12주 목표 선언"],
+    ["promise", `${weekCount}주 목표 선언`],
     ["action", "핵심 활동"],
     ["cost", "헌신 비용"],
   ];
@@ -757,7 +762,7 @@ export function CommitmentWheel({ entries, onChange, readonly = false }) {
           </ol>
           <p className="muted">
             삶의 태도를 정하는 공통 연습입니다. 실행 목표로 삼을 약속은 ‘목표와
-            12주 계획’에서 선택하세요.
+            {weekCount}주 계획’에서 선택하세요.
           </p>
         </div>
         <div className="wheel-wrap">
@@ -846,7 +851,7 @@ export function CommitmentWheel({ entries, onChange, readonly = false }) {
         <div className="commitment-table">
           <div className="commitment-columns" aria-hidden="true">
             <span />
-            <strong>12주 목표 선언</strong>
+            <strong>{weekCount}주 목표 선언</strong>
             <strong>핵심 활동</strong>
             <strong>헌신 비용</strong>
             <span />

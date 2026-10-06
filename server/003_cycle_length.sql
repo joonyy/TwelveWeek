@@ -1,0 +1,2 @@
+ALTER TABLE cycles ADD COLUMN IF NOT EXISTS week_count integer NOT NULL DEFAULT 12
+  CHECK (week_count BETWEEN 1 AND 12);

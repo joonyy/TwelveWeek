@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateOnly } from "../shared/domain.js";
+import { dateOnly, MAX_WEEK_COUNT } from "../shared/domain.js";
 const text = z.string().max(6000);
 const id = z.uuid();
 export const dateSchema = z.string().refine((v) => {
@@ -100,6 +100,7 @@ export const planSchema = z
 export const cycleInput = z.object({
   title: z.string().trim().min(1).max(120),
   startDate: dateSchema,
+  weekCount: z.number().int().min(1).max(MAX_WEEK_COUNT).optional(),
   plan: planSchema,
   version: z.number().int().min(0),
 });

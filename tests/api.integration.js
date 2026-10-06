@@ -426,3 +426,204 @@ test("sessions can be revoked and expired tokens cannot resume", async () => {
   );
   await call("get", "/me").expect(401);
 });
+test("eleven-week activation and finish use selected duration and keep legacy default", async () => {
+  const profile = (await call("post", "/profiles", { name: "11주 검증" })).body;
+  const who = (await call("post", "/sessions", { profileId: profile.id })).body
+    .token;
+  for (const weekCount of [0, 13, 1.5])
+    await call(
+      "post",
+      "/cycles",
+      {
+        title: "잘못된 기간",
+        startDate: "2026-10-12",
+        weekCount,
+      },
+      who,
+    ).expect(400);
+  const legacy = (
+    await call(
+      "post",
+      "/cycles",
+      {
+        title: "기본 기간",
+        startDate: "2026-10-12",
+      },
+      who,
+    ).expect(201)
+  ).body;
+  assert.equal(legacy.week_count, 12);
+  let c = (
+    await call(
+      "post",
+      "/cycles",
+      {
+        title: "11주",
+        startDate: "2026-10-12",
+        weekCount: 11,
+      },
+      who,
+    ).expect(201)
+  ).body;
+  assert.equal(c.week_count, 11);
+  assert.equal(c.plan.goals[0].tactics[0].weeks.length, 11);
+  assert.equal(
+    (await call("get", "/cycles", null, who)).body.find((x) => x.id === c.id)
+      .week_count,
+    11,
+  );
+  c.plan.goals[0].title = "기간 안의 결과";
+  c.plan.goals[0].tactics[0].title = "핵심 실행";
+  c.plan.goals[0].tactics[0].condition = "완료 기준";
+  c = (
+    await call(
+      "put",
+      `/cycles/${c.id}`,
+      {
+        title: c.title,
+        startDate: c.start_date,
+        plan: c.plan,
+        version: c.version,
+      },
+      who,
+    ).expect(200)
+  ).body;
+  assert.equal(c.week_count, 11); // Old clients omitting the field keep the saved duration.
+  c = (
+    await call(
+      "post",
+      `/cycles/${c.id}/start`,
+      { version: c.version },
+      who,
+    ).expect(200)
+  ).body;
+  assert.equal(
+    (
+      await pool.query(
+        "SELECT count(*)::int AS count FROM weeks WHERE cycle_id=$1",
+        [c.id],
+      )
+    ).rows[0].count,
+    11,
+  );
+  await call("get", `/cycles/${c.id}/weeks/11`, null, who).expect(200);
+  await call("get", `/cycles/${c.id}/weeks/12`, null, who).expect(400);
+  for (const [now, status] of [
+    ["2026-12-28T03:59:59+09:00", 409],
+    ["2026-12-28T04:00:00+09:00", 200],
+  ]) {
+    const timed = createApp({
+      pool,
+      now: () => new Date(now),
+      rateLimits: false,
+    });
+    await request(timed)
+      .post(`/api/cycles/${c.id}/finish`)
+      .set("Authorization", `Bearer ${who}`)
+      .expect(status);
+  }
+});
+test("active shortening excludes future weeks without deleting records or changing frozen scores", async () => {
+  const profile = (await call("post", "/profiles", { name: "기간 변경 검증" }))
+    .body;
+  const who = (await call("post", "/sessions", { profileId: profile.id })).body
+    .token;
+  const p = structuredClone(plan);
+  p.goals[0].tactics.forEach((t) => {
+    t.weeks = [1, 11, 12];
+  });
+  let c = (
+    await call(
+      "post",
+      "/cycles",
+      {
+        title: "12에서 11로",
+        startDate: "2026-10-05",
+        plan: p,
+      },
+      who,
+    ).expect(201)
+  ).body;
+  c = (
+    await call(
+      "post",
+      `/cycles/${c.id}/start`,
+      { version: c.version },
+      who,
+    ).expect(200)
+  ).body;
+  let first = (await call("get", `/cycles/${c.id}/weeks/1`, null, who)).body;
+  first = (
+    await call(
+      "put",
+      `/cycles/${c.id}/weeks/1/occurrences/${t}~0/schedule`,
+      {
+        version: first.version,
+        date: "2026-10-07",
+        time: "19:00",
+        minutes: 60,
+      },
+      who,
+    ).expect(200)
+  ).body;
+  first = (
+    await call(
+      "put",
+      `/cycles/${c.id}/weeks/1/occurrences/${t}~0/completion`,
+      {
+        version: first.version,
+        completed: true,
+      },
+      who,
+    ).expect(200)
+  ).body;
+  const last = (await call("get", `/cycles/${c.id}/weeks/12`, null, who)).body;
+  const update = (weeks) => ({
+    title: c.title,
+    startDate: c.start_date,
+    plan: p,
+    version: c.version,
+    weekCount: weeks,
+  });
+  c = (await call("put", `/cycles/${c.id}`, update(11), who).expect(200)).body;
+  assert.equal(c.week_count, 11);
+  assert.deepEqual(
+    (await call("get", `/cycles/${c.id}/weeks/1`, null, who)).body,
+    first,
+  );
+  assert.deepEqual(c.plan.goals[0].tactics[0].weeks, [1, 11]);
+  await call("get", `/cycles/${c.id}/weeks/12`, null, who).expect(400);
+  const retained = (
+    await pool.query("SELECT * FROM weeks WHERE cycle_id=$1 AND number=12", [
+      c.id,
+    ])
+  ).rows[0];
+  assert.deepEqual(retained.state, last.state);
+  assert.equal(retained.version, last.version);
+  await call("put", `/cycles/${c.id}`, update(12), who).expect(409);
+  const late = createApp({
+    pool,
+    now: () => new Date("2026-10-12T04:00:00+09:00"),
+    rateLimits: false,
+  });
+  await request(late)
+    .put(`/api/cycles/${c.id}`)
+    .set("Authorization", `Bearer ${who}`)
+    .send(update(1))
+    .expect(409);
+  assert.equal(
+    (await call("get", `/cycles/${c.id}`, null, who)).body.week_count,
+    11,
+  );
+  const change = (
+    await pool.query(
+      "SELECT detail FROM changes WHERE cycle_id=$1 AND kind='cycle.length_changed'",
+      [c.id],
+    )
+  ).rows[0];
+  assert.deepEqual(change.detail, {
+    fromWeeks: 12,
+    toWeeks: 11,
+    retainedWeekRecords: true,
+  });
+});

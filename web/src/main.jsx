@@ -23,6 +23,8 @@ import {
 import { api, token } from "./api.js";
 import {
   DEFAULT_START,
+  DEFAULT_WEEK_COUNT,
+  MAX_WEEK_COUNT,
   addDays,
   currentWeek,
   weekStart,
@@ -36,6 +38,7 @@ import {
   newTactic,
   editablePlan,
   hasGoalContent,
+  planWithinWeeks,
 } from "../../shared/planning.js";
 import {
   VisionEditor,
@@ -47,6 +50,7 @@ import {
 import "./style.css";
 
 const uid = () => crypto.randomUUID();
+const cycleWeeks = (cycle) => cycle.week_count ?? DEFAULT_WEEK_COUNT;
 const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
 const shortDate = (d) => `${Number(d.slice(5, 7))}.${Number(d.slice(8, 10))}`;
 const range = (start, end) => `${shortDate(start)} — ${shortDate(end)}`;
@@ -270,7 +274,7 @@ function App() {
                       onClick={() => navigate(() => setView("plan"))}
                     >
                       <Target size={18} />
-                      비전과 12주 계획
+                      비전과 {cycleWeeks(cycle)}주 계획
                     </button>
                     <button
                       disabled={cycle.status === "draft"}
@@ -506,7 +510,8 @@ function CycleList({ open, run, busy, onCreated }) {
   const [list, setList] = useState([]),
     [creating, setCreating] = useState(false),
     [title, setTitle] = useState("나의 첫 12주"),
-    [start, setStart] = useState(DEFAULT_START);
+    [start, setStart] = useState(DEFAULT_START),
+    [weekCount, setWeekCount] = useState(DEFAULT_WEEK_COUNT);
   useEffect(() => {
     run(async () => setList(await api("/cycles")));
   }, []);
@@ -516,7 +521,7 @@ function CycleList({ open, run, busy, onCreated }) {
       onCreated(
         await api("/cycles", {
           method: "POST",
-          body: { title, startDate: start },
+          body: { title, startDate: start, weekCount },
         }),
       );
     });
@@ -546,13 +551,19 @@ function CycleList({ open, run, busy, onCreated }) {
             </span>
             <h2>{c.title}</h2>
             <p>
-              {c.start_date} — {addDays(c.start_date, 83)}
+              {c.start_date} — {addDays(c.start_date, cycleWeeks(c) * 7 - 1)} ·{" "}
+              {cycleWeeks(c)}주 실행
             </p>
             <div className="mini-weeks">
-              {Array.from({ length: 12 }, (_, i) => (
+              {Array.from({ length: cycleWeeks(c) }, (_, i) => (
                 <i
                   key={i}
-                  className={i < currentWeek(c.start_date) ? "filled" : ""}
+                  className={
+                    c.status !== "draft" &&
+                    i < currentWeek(c.start_date, new Date(), cycleWeeks(c))
+                      ? "filled"
+                      : ""
+                  }
                 />
               ))}
             </div>
@@ -586,7 +597,7 @@ function CycleList({ open, run, busy, onCreated }) {
         <Modal title="새로운 12주" onClose={() => setCreating(false)}>
           <form onSubmit={create}>
             <Field
-              label="이번 12주의 이름"
+              label={`이번 ${weekCount}주의 이름`}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
@@ -599,8 +610,10 @@ function CycleList({ open, run, busy, onCreated }) {
               onChange={(e) => setStart(e.target.value)}
               required
             />
+            <WeekCountField value={weekCount} onChange={setWeekCount} />
             <p className="muted">
-              실행 12주 + 돌아보고 쉬어가는 13주차로 구성됩니다.
+              실행 {weekCount}주 + 돌아보고 쉬어가는 {weekCount + 1}주차로
+              구성됩니다. 기간은 1~12주 사이에서 선택할 수 있어요.
             </p>
             <Button disabled={busy}>
               비전부터 작성하기
@@ -613,17 +626,53 @@ function CycleList({ open, run, busy, onCreated }) {
   );
 }
 
+function WeekCountField({
+  value,
+  onChange,
+  min = 1,
+  max = MAX_WEEK_COUNT,
+  disabled = false,
+}) {
+  return (
+    <label className="field">
+      <span>실행 주수</span>
+      <select
+        aria-label="실행 주수"
+        value={value}
+        onChange={(e) => onChange(+e.target.value)}
+        disabled={disabled}
+      >
+        {Array.from({ length: max - min + 1 }, (_, i) => i + min).map(
+          (weeks) => (
+            <option key={weeks} value={weeks}>
+              {weeks}주
+            </option>
+          ),
+        )}
+      </select>
+    </label>
+  );
+}
+
 function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
   const [data, setData] = useState(() =>
-      editablePlan(cycle.plan, { draft: cycle.status === "draft" }),
+      editablePlan(cycle.plan, {
+        draft: cycle.status === "draft",
+        weekCount: cycleWeeks(cycle),
+      }),
     ),
     [title, setTitle] = useState(cycle.title),
     [start, setStart] = useState(cycle.start_date),
+    [weekCount, setWeekCount] = useState(cycleWeeks(cycle)),
     [tab, setTab] = useState(0),
     [dirty, setDirty] = useState(false),
     [starting, setStarting] = useState(false);
-  const tabs = ["비전", "목표와 12주 계획", "모범 주간", "삶의 태도"];
+  const tabs = ["비전", `목표와 ${weekCount}주 계획`, "모범 주간", "삶의 태도"];
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(start);
+  const minimumWeeks =
+    cycle.status === "active"
+      ? Math.min(cycleWeeks(cycle), Math.max(1, currentWeek(cycle.start_date)))
+      : 1;
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [tab]);
@@ -648,7 +697,13 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
   async function save() {
     const c = await api(`/cycles/${cycle.id}`, {
       method: "PUT",
-      body: { title, startDate: start, plan: data, version: cycle.version },
+      body: {
+        title,
+        startDate: start,
+        weekCount,
+        plan: data,
+        version: cycle.version,
+      },
     });
     setCycle(c);
     setDirty(false);
@@ -664,7 +719,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
       });
       setCycle(active);
       setView("week");
-      notify("12주 실행 공간을 열었어요.");
+      notify(`${cycleWeeks(active)}주 실행 공간을 열었어요.`);
     });
   const goalChange = (id, key, value) =>
     change(
@@ -681,7 +736,8 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             <br className="mobile-only" /> 실행을 작게 만드세요.
           </h1>
           <p>
-            비전 → 12주 목표 → 목표별 전술. 작성 중인 생각도 저장할 수 있어요.
+            비전 → {weekCount}주 목표 → 목표별 전술. 작성 중인 생각도 저장할 수
+            있어요.
           </p>
         </div>
         <div className="save-area">
@@ -697,7 +753,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
       </header>
       <div className="cycle-meta">
         <Field
-          label="12주 이름"
+          label={`${weekCount}주 이름`}
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
@@ -715,19 +771,37 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             setDirty(true);
           }}
         />
+        <WeekCountField
+          value={weekCount}
+          min={minimumWeeks}
+          max={cycle.status === "draft" ? MAX_WEEK_COUNT : cycleWeeks(cycle)}
+          disabled={cycle.status === "complete"}
+          onChange={(count) => {
+            setWeekCount(count);
+            setData((p) => planWithinWeeks(p, count));
+            setDirty(true);
+          }}
+        />
         <div>
           <small>실행 기간</small>
           <strong>
             {validStart
-              ? range(start, addDays(start, 83))
+              ? range(start, addDays(start, weekCount * 7 - 1))
               : "시작일을 선택해주세요."}
           </strong>
           <small>
             {validStart &&
-              `13주차 ${range(addDays(start, 84), addDays(start, 90))} · 회고와 회복`}
+              `${weekCount + 1}주차 ${range(addDays(start, weekCount * 7), addDays(start, weekCount * 7 + 6))} · 회고와 회복`}
           </small>
         </div>
       </div>
+      {weekCount < cycleWeeks(cycle) && (
+        <div className="info-note">
+          실행 기간을 {cycleWeeks(cycle)}주에서 {weekCount}주로 줄입니다.
+          제외되는 미래 주차의 전술은 이번 실행 기간과 집계에 포함되지 않습니다.
+          목표와 활동 내용은 유지되므로 실행 주차를 다시 확인해주세요.
+        </div>
+      )}
       {cycle.status === "active" && (
         <div className="info-note">
           계획을 바꾸면 아직 시작하지 않은 주에 반영됩니다. 이번 주와 지난주의
@@ -811,8 +885,8 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             <Guide ids={["plan", "commitment"]} />
             <SectionTitle
               number="03–07"
-              title="12주 목표와 목표별 계획"
-              description="프로젝트와 가치관에서 후보를 찾고, 이번 12주에 실제로 변화를 만들 목표를 선택하세요. 목표마다 전술·장애물·지표를 따로 작성합니다."
+              title={`${weekCount}주 목표와 목표별 계획`}
+              description={`프로젝트와 가치관에서 후보를 찾고, 이번 ${weekCount}주에 실제로 변화를 만들 목표를 선택하세요. 목표마다 전술·장애물·지표를 따로 작성합니다.`}
             />
             {data.goals.map((g, index) => (
               <section className="panel goal-panel" key={g.id}>
@@ -839,8 +913,8 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                   </button>
                 </header>
                 <Field
-                  label="03. 12주 목표"
-                  placeholder="12주 뒤 어떤 결과에 도달할 것인가요?"
+                  label={`03. ${weekCount}주 목표`}
+                  placeholder={`${weekCount}주 뒤 어떤 결과에 도달할 것인가요?`}
                   value={g.title}
                   onChange={(e) => goalChange(g.id, "title", e.target.value)}
                 />
@@ -865,7 +939,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                   />
                 </div>
                 <div className="subheading">
-                  <h3>05. 12주 계획</h3>
+                  <h3>05. {weekCount}주 계획</h3>
                   <p>
                     전술은 주차로 배치하세요. 한 번의 실행은 완료 여부를 명확히
                     판단할 수 있어야 합니다.
@@ -876,6 +950,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                     key={t.id}
                     tactic={t}
                     index={ti}
+                    weekCount={weekCount}
                     onChange={(v) =>
                       goalChange(
                         g.id,
@@ -895,7 +970,10 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 <Button
                   variant="light"
                   onClick={() =>
-                    goalChange(g.id, "tactics", [...g.tactics, newTactic()])
+                    goalChange(g.id, "tactics", [
+                      ...g.tactics,
+                      newTactic(weekCount),
+                    ])
                   }
                 >
                   <Plus size={16} />
@@ -1022,10 +1100,12 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             ))}
             <Button
               variant="outlined"
-              onClick={() => change("goals", [...data.goals, newGoal()])}
+              onClick={() =>
+                change("goals", [...data.goals, newGoal(weekCount)])
+              }
             >
               <Plus size={18} />
-              12주 목표 추가
+              {weekCount}주 목표 추가
             </Button>
           </>
         )}
@@ -1104,6 +1184,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 description="원하는 것뿐 아니라 필요한 행동과 비용까지 바라보고, 지금 감당할 약속을 선택하세요."
               />
               <CommitmentWheel
+                weekCount={weekCount}
                 entries={data.commitments}
                 onChange={(v) => change("commitments", v)}
                 readonly={cycle.status === "complete"}
@@ -1129,7 +1210,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           </Button>
         ) : cycle.status === "draft" ? (
           <Button onClick={() => setStarting(true)}>
-            12주 착수
+            {weekCount}주 착수
             <ArrowRight size={18} />
           </Button>
         ) : (
@@ -1148,12 +1229,14 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
       </footer>
       {starting && (
         <Modal
-          title="이번 12주를 시작할까요?"
+          title={`이번 ${weekCount}주를 시작할까요?`}
           onClose={() => setStarting(false)}
         >
           <p>
             {data.goals.filter(hasGoalContent).length}개의 목표를{" "}
-            {validStart ? range(start, addDays(start, 83)) : "시작일 선택 후"}{" "}
+            {validStart
+              ? range(start, addDays(start, weekCount * 7 - 1))
+              : "시작일 선택 후"}{" "}
             동안 실행합니다.
           </p>
           <p className="muted">
@@ -1162,7 +1245,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             시작 후에도 다음 주 이후의 계획은 수정할 수 있습니다.
           </p>
           <Button disabled={busy} onClick={activate}>
-            저장하고 12주 착수
+            저장하고 {weekCount}주 착수
             <ArrowRight size={18} />
           </Button>
         </Modal>
@@ -1181,7 +1264,7 @@ function SectionTitle({ number, title, description }) {
     </header>
   );
 }
-function TacticEditor({ tactic: t, index, onChange, onRemove }) {
+function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
   return (
     <div className="tactic-editor">
       <header>
@@ -1234,7 +1317,7 @@ function TacticEditor({ tactic: t, index, onChange, onRemove }) {
       <div className="field">
         <span>실행 주차</span>
         <div className="week-chips">
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => (
+          {Array.from({ length: weekCount }, (_, i) => i + 1).map((w) => (
             <button
               key={w}
               aria-pressed={t.weeks.includes(w)}
@@ -1258,8 +1341,10 @@ function TacticEditor({ tactic: t, index, onChange, onRemove }) {
 }
 
 function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const weekCount = cycleWeeks(cycle),
+    reviewNumber = weekCount + 1;
   const [number, setNumber] = useState(() =>
-      Math.max(1, currentWeek(cycle.start_date)),
+      Math.max(1, currentWeek(cycle.start_date, new Date(), weekCount)),
     ),
     [week, setWeek] = useState(null),
     [mode, setMode] = useState("day"),
@@ -1271,7 +1356,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
   const reviewDirty =
     !!week && JSON.stringify(review) !== JSON.stringify(week.state.review);
   useEffect(() => {
-    if (number === 13) return;
+    if (number === reviewNumber) return;
     onDirty(reviewDirty);
     return () => onDirty(false);
   }, [reviewDirty, number]);
@@ -1288,7 +1373,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
     window.scrollTo(0, 0);
   }, [number, mode]);
   useEffect(() => {
-    if (number > 12 || !week) return;
+    if (number > weekCount || !week) return;
     const refreshDate = async () => {
       if (document.visibilityState !== "visible") return;
       try {
@@ -1315,7 +1400,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
   useEffect(() => {
     let live = true;
     setWeek(null);
-    if (number <= 12)
+    if (number <= weekCount)
       run(async () => {
         const w = await api(`/cycles/${cycle.id}/weeks/${number}`);
         if (live) {
@@ -1342,7 +1427,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `12주-${number}주차.ics`;
+      a.download = `${weekCount}주-${number}주차.ics`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       notify("Apple 캘린더에서 내려받은 파일을 열어주세요.");
@@ -1385,7 +1470,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
         <div>
           <span className="eyebrow">{cycle.title}</span>
           <h1>
-            {number === 13 ? (
+            {number === reviewNumber ? (
               "잠시 멈추고, 다음을 바라보기."
             ) : (
               <>
@@ -1395,8 +1480,8 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
             )}
           </h1>
           <p>
-            {number === 13
-              ? "13주차는 점수 경쟁 없이 돌아보고 회복하는 시간입니다."
+            {number === reviewNumber
+              ? `${reviewNumber}주차는 점수 경쟁 없이 돌아보고 회복하는 시간입니다.`
               : "점수는 실행을 확인하고 다음 선택을 돕는 정보입니다."}
           </p>
         </div>
@@ -1414,24 +1499,26 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
               value={number}
               onChange={(e) => chooseWeek(+e.target.value)}
             >
-              {Array.from({ length: 13 }, (_, i) => i + 1).map((w) => (
-                <option key={w} value={w}>
-                  {w}주차{w === 13 ? " · 회고" : ""}
-                </option>
-              ))}
+              {Array.from({ length: reviewNumber }, (_, i) => i + 1).map(
+                (w) => (
+                  <option key={w} value={w}>
+                    {w}주차{w === reviewNumber ? " · 회고" : ""}
+                  </option>
+                ),
+              )}
             </select>
             <small>{range(start, addDays(start, 6))}</small>
           </label>
           <button
             aria-label="다음 주"
-            disabled={number === 13}
+            disabled={number === reviewNumber}
             onClick={() => chooseWeek(number + 1)}
           >
             <ChevronRight size={20} />
           </button>
         </div>
       </header>
-      {number === 13 ? (
+      {number === reviewNumber ? (
         <RestWeek
           cycle={cycle}
           setCycle={setCycle}
@@ -2000,6 +2087,7 @@ function CompletionModal({ occurrence, busy, onClose, onSave }) {
   );
 }
 function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const weekCount = cycleWeeks(cycle);
   const [summary, setSummary] = useState([]),
     [reflection, setReflection] = useState({
       results: cycle.reflection?.results || "",
@@ -2016,27 +2104,27 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
   useEffect(() => {
     run(async () => {
       const weeks = await Promise.all(
-        Array.from({ length: 12 }, (_, i) =>
+        Array.from({ length: weekCount }, (_, i) =>
           api(`/cycles/${cycle.id}/weeks/${i + 1}`),
         ),
       );
       setSummary(weeks);
     });
-  }, [cycle.id]);
+  }, [cycle.id, weekCount]);
   async function save() {
     const c = await api(`/cycles/${cycle.id}/reflection`, {
       method: "PUT",
       body: { ...reflection, version: cycle.version },
     });
     setCycle(c);
-    notify("12주 회고를 저장했어요.");
+    notify(`${weekCount}주 회고를 저장했어요.`);
     return c;
   }
   return (
     <>
       <Guide ids={["measure", "vision"]} />
       <section className="panel">
-        <h2>12주 동안 쌓인 실행</h2>
+        <h2>{weekCount}주 동안 쌓인 실행</h2>
         <div className="season-chart">
           {summary.map((w) => (
             <div key={w.number}>
@@ -2058,7 +2146,7 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
         >
           <div className="rest-prompts">
             {[
-              ["results", "이번 12주에 실제로 달라진 것은?"],
+              ["results", `이번 ${weekCount}주에 실제로 달라진 것은?`],
               ["lessons", "유지할 행동과 그만둘 행동은?"],
               ["next", "회복한 뒤 향하고 싶은 방향은?"],
             ].map(([key, label]) => (
@@ -2075,18 +2163,18 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
           </div>
           <Button variant="light" disabled={busy} onClick={() => run(save)}>
             <Save size={17} />
-            12주 회고 저장
+            {weekCount}주 회고 저장
           </Button>
         </fieldset>
         <p className="footnote">
-          13주차에는 실행 점수를 만들지 않습니다. 회고 입력은 선택 사항입니다.
-          마무리하면 기록을 보관하고 새로운 12주를 시작할 수 있어요.
+          {weekCount + 1}주차에는 실행 점수를 만들지 않습니다. 회고 입력은 선택
+          사항입니다. 마무리하면 기록을 보관하고 새로운 주기를 시작할 수 있어요.
         </p>
         <Button
           disabled={
             busy ||
             cycle.status === "complete" ||
-            currentWeek(cycle.start_date) < 13
+            currentWeek(cycle.start_date, new Date(), weekCount) < weekCount + 1
           }
           onClick={() =>
             run(async () => {
@@ -2097,7 +2185,9 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
             })
           }
         >
-          {cycle.status === "complete" ? "마무리한 12주" : "이 12주 마무리하기"}
+          {cycle.status === "complete"
+            ? `마무리한 ${weekCount}주`
+            : `이 ${weekCount}주 마무리하기`}
           <Flag size={17} />
         </Button>
       </section>

@@ -52,6 +52,13 @@ test("first cycle is 84 execution days then 7 review days", () => {
   assert.equal(addDays("2026-10-05", 90), "2027-01-03");
   assert.equal(currentWeek("2026-10-05", "2026-12-28T04:00:00+09:00"), 13);
 });
+test("eleven-week cycle keeps December 27 and enters review at KST 04:00", () => {
+  assert.equal(addDays("2026-10-12", 11 * 7 - 1), "2026-12-27");
+  assert.equal(currentWeek("2026-10-12", "2026-12-28T03:59:59+09:00", 11), 11);
+  assert.equal(currentWeek("2026-10-12", "2026-12-28T04:00:00+09:00", 11), 12);
+  assert.equal(currentWeek("2026-10-12", "2027-01-20T04:00:00+09:00", 11), 12);
+  assert.equal(currentWeek("2026-10-12", "2026-10-11T20:00:00+09:00", 11), 0);
+});
 test("post-midnight plan times map into the following calendar day", () => {
   assert.equal(
     calendarInstant("2026-10-05", "02:30").toISOString(),

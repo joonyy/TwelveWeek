@@ -13,15 +13,15 @@ export const COMMITMENT_AREAS = [
   "비즈니스",
   "종교",
 ];
-export const newTactic = () => ({
+export const newTactic = (weekCount = 12) => ({
   id: uid(),
   title: "",
   condition: "",
   kind: "weekly",
   count: 1,
-  weeks: Array.from({ length: 12 }, (_, i) => i + 1),
+  weeks: Array.from({ length: weekCount }, (_, i) => i + 1),
 });
-export const newGoal = () => ({
+export const newGoal = (weekCount = 12) => ({
   id: uid(),
   title: "",
   success: "",
@@ -29,7 +29,7 @@ export const newGoal = () => ({
   leading: "",
   lagging: "",
   measurement: "",
-  tactics: [newTactic()],
+  tactics: [newTactic(weekCount)],
   difficulties: [{ id: uid(), tacticId: "", obstacle: "", response: "" }],
 });
 export const newCommitment = (area) => ({
@@ -58,7 +58,7 @@ export function hasGoalContent(g) {
   );
 }
 // Add missing editor structure in memory; existing content is never overwritten.
-export function editablePlan(plan, { draft = true } = {}) {
+export function editablePlan(plan, { draft = true, weekCount = 12 } = {}) {
   const copy = structuredClone(plan);
   copy.visionModes = { ...VISION_MODES, ...copy.visionModes };
   copy.responsibilityActions = {
@@ -67,10 +67,10 @@ export function editablePlan(plan, { draft = true } = {}) {
     ...copy.responsibilityActions,
   };
   if (draft && !copy.goals.length)
-    copy.goals = Array.from({ length: 3 }, newGoal);
+    copy.goals = Array.from({ length: 3 }, () => newGoal(weekCount));
   copy.goals = copy.goals.map((g) => ({
     ...g,
-    tactics: g.tactics.length ? g.tactics : [newTactic()],
+    tactics: g.tactics.length ? g.tactics : [newTactic(weekCount)],
     difficulties: g.difficulties.length
       ? g.difficulties
       : [{ id: uid(), tacticId: "", obstacle: "", response: "" }],
@@ -84,6 +84,18 @@ export function editablePlan(plan, { draft = true } = {}) {
     for (let i = count; i < 3; i++) copy.commitments.push(newCommitment(area));
   }
   return copy;
+}
+export function planWithinWeeks(plan, weekCount) {
+  return {
+    ...plan,
+    goals: plan.goals.map((g) => ({
+      ...g,
+      tactics: g.tactics.map((t) => ({
+        ...t,
+        weeks: t.weeks.filter((w) => w <= weekCount),
+      })),
+    })),
+  };
 }
 export function calendarOffset(time) {
   const [h, m] = time.split(":").map(Number);

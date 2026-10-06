@@ -8,8 +8,25 @@ import {
   timeAtOffset,
   calendarFragments,
   calendarLanes,
+  planWithinWeeks,
 } from "../shared/planning.js";
 import { planSchema } from "../server/schema.js";
+test("shorter draft keeps content and IDs, limits starter and selected execution weeks", () => {
+  const p = emptyPlan(11);
+  assert.equal(p.goals.length, 3);
+  assert.ok(p.goals.every((g) => g.tactics[0].weeks.length === 11));
+  const full = emptyPlan();
+  full.goals[0].title = "내용 보존";
+  full.goals[0].tactics[0].weeks = [1, 11, 12];
+  const before = structuredClone(full);
+  const shortened = planWithinWeeks(full, 11);
+  assert.deepEqual(full, before);
+  assert.equal(shortened.goals[0].title, "내용 보존");
+  assert.equal(shortened.goals[0].id, before.goals[0].id);
+  assert.deepEqual(shortened.goals[0].tactics[0].weeks, [1, 11]);
+  const legacy = editablePlan({ ...p, goals: [] }, { weekCount: 11 });
+  assert.ok(legacy.goals.every((g) => g.tactics[0].weeks.length === 11));
+});
 test("new plan has three immediately editable goals, list modes and seven areas", () => {
   const p = emptyPlan();
   assert.equal(p.goals.length, 3);
