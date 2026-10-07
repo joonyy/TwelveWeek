@@ -6,4 +6,5 @@ web/dist/
 *.pem
 playwright-report/
 test-results/
+.logs/
 .DS_Store
