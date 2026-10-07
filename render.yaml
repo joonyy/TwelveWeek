@@ -23,6 +23,12 @@ services:
         sync: false
       - key: TOKEN_TTL_DAYS
         value: "365"
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: WEB_PUBLIC_URL
+        sync: false
+      - key: AI_SECRETS_KEY
+        generateValue: true
   - type: web
     name: twelve-week-web
     runtime: static

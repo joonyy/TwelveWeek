@@ -7,7 +7,13 @@ export async function migrate(pool) {
     await db.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
-    for (const name of ["001_initial", "002_reflection", "003_cycle_length"]) {
+    for (const name of [
+      "001_initial",
+      "002_reflection",
+      "003_cycle_length",
+      "004_vision_ai",
+      "005_ai_token_family",
+    ]) {
       const existing = await db.query(
         "SELECT 1 FROM schema_migrations WHERE name=$1",
         [name],

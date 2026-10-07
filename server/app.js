@@ -23,6 +23,8 @@ import {
   DEFAULT_WEEK_COUNT,
 } from "../shared/domain.js";
 import { calendar } from "./calendar.js";
+import { mountAIRoutes } from "./ai-routes.js";
+import { mountVisionMCP } from "./vision-mcp.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -51,6 +53,9 @@ export function createApp({
   now = () => new Date(),
   webOrigin = process.env.WEB_ORIGIN || "http://localhost:5178",
   rateLimits = true,
+  aiProvider,
+  codex = null,
+  aiEnv = process.env,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -171,6 +176,22 @@ export function createApp({
       "INSERT INTO changes(profile_id,cycle_id,kind,detail) VALUES($1,$2,$3,$4)",
       [req.profile.id, cycle.id, kind, JSON.stringify(detail)],
     );
+  const visionService = mountAIRoutes(app, {
+    pool,
+    now,
+    rateLimits,
+    aiProvider,
+    codex,
+    env: aiEnv,
+  });
+  mountVisionMCP(app, {
+    pool,
+    now,
+    service: visionService,
+    webOrigin,
+    rateLimits,
+    env: aiEnv,
+  });
   app.get("/api/cycles", async (req, res) =>
     res.json(
       (
