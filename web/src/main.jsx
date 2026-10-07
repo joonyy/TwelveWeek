@@ -48,6 +48,21 @@ import {
   WeekCalendar,
 } from "./PlanningWidgets.jsx";
 import "./style.css";
+import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
+
+function connectionRequest() {
+  const raw = new URLSearchParams(location.search).get("ai_authorize");
+  if (!raw) return null;
+  try {
+    const bytes = Uint8Array.from(
+      atob(raw.replaceAll("-", "+").replaceAll("_", "/")),
+      (c) => c.charCodeAt(0),
+    );
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return {};
+  }
+}
 
 const uid = () => crypto.randomUUID();
 const cycleWeeks = (cycle) => cycle.week_count ?? DEFAULT_WEEK_COUNT;
@@ -165,7 +180,8 @@ function App() {
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [principles, setPrinciples] = useState(false),
-    [editing, setEditing] = useState(false);
+    [editing, setEditing] = useState(false),
+    [aiAuthorization, setAIAuthorization] = useState(connectionRequest);
   useEffect(() => {
     const leave = (e) => {
       if (editing) {
@@ -333,6 +349,16 @@ function App() {
           )}
           {!profile ? (
             <Entry onLogin={setProfile} run={run} busy={busy} />
+          ) : aiAuthorization ? (
+            <AIConnectionConsent
+              request={aiAuthorization}
+              onCancel={() => {
+                const url = new URL(location.href);
+                url.searchParams.delete("ai_authorize");
+                history.replaceState(null, "", url);
+                setAIAuthorization(null);
+              }}
+            />
           ) : !cycle ? (
             <CycleList
               open={open}
@@ -666,7 +692,8 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     [weekCount, setWeekCount] = useState(cycleWeeks(cycle)),
     [tab, setTab] = useState(0),
     [dirty, setDirty] = useState(false),
-    [starting, setStarting] = useState(false);
+    [starting, setStarting] = useState(false),
+    [remoteCycle, setRemoteCycle] = useState(null);
   const tabs = ["비전", `목표와 ${weekCount}주 계획`, "모범 주간", "삶의 태도"];
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(start);
   const minimumWeeks =
@@ -710,6 +737,34 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     notify("계획을 저장했어요.");
     return c;
   }
+  const acceptRemote = (fresh) => {
+    if (fresh.version <= cycle.version) return;
+    if (!dirty) {
+      setData(
+        editablePlan(fresh.plan, {
+          draft: fresh.status === "draft",
+          weekCount: cycleWeeks(fresh),
+        }),
+      );
+      setTitle(fresh.title);
+      setStart(fresh.start_date);
+      setWeekCount(cycleWeeks(fresh));
+      setCycle(fresh);
+      setRemoteCycle(null);
+      return;
+    }
+    const onlyVision =
+      fresh.title === cycle.title &&
+      fresh.start_date === cycle.start_date &&
+      cycleWeeks(fresh) === cycleWeeks(cycle) &&
+      JSON.stringify({ ...fresh.plan, longVision: cycle.plan.longVision }) ===
+        JSON.stringify(cycle.plan);
+    if (onlyVision && data.longVision === cycle.plan.longVision) {
+      setData((p) => ({ ...p, longVision: fresh.plan.longVision }));
+      setCycle(fresh);
+      setRemoteCycle(null);
+    } else setRemoteCycle(fresh);
+  };
   const activate = () =>
     run(async () => {
       const c = dirty ? await save() : cycle;
@@ -821,6 +876,36 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           </button>
         ))}
       </div>
+      {remoteCycle && (
+        <div className="info-note" role="status">
+          AI 또는 다른 화면에서 저장된 내용이 바뀌었어요. 현재 작성 중인 내용은
+          유지하고 있어요.
+          <Button
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "현재 저장하지 않은 편집을 버리고 최신 저장 내용을 불러올까요?",
+                )
+              )
+                return;
+              setDirty(false);
+              setData(
+                editablePlan(remoteCycle.plan, {
+                  draft: remoteCycle.status === "draft",
+                  weekCount: cycleWeeks(remoteCycle),
+                }),
+              );
+              setTitle(remoteCycle.title);
+              setStart(remoteCycle.start_date);
+              setWeekCount(cycleWeeks(remoteCycle));
+              setCycle(remoteCycle);
+              setRemoteCycle(null);
+            }}
+          >
+            최신 저장 내용 불러오기
+          </Button>
+        </div>
+      )}
       <fieldset disabled={cycle.status === "complete"} className="plan-fields">
         {tab === 0 && (
           <>
@@ -831,19 +916,31 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="원대한 장기 비전"
                 description="지금 가능한 것부터 검열하지 말고, 살고 싶은 삶을 최대한 펼쳐보세요."
               />
-              <VisionEditor
-                label="장기 비전"
-                value={data.longVision}
-                mode={data.visionModes.longVision}
-                onChange={(v) => change("longVision", v)}
-                onMode={(mode) =>
-                  change("visionModes", {
-                    ...data.visionModes,
-                    longVision: mode,
-                  })
-                }
-                placeholder="가지고 싶고, 하고 싶고, 되고 싶은 모습을 자유롭게 적어보세요."
-              />
+              <div className="vision-workspace">
+                <div>
+                  <VisionEditor
+                    label="장기 비전"
+                    value={data.longVision}
+                    mode={data.visionModes.longVision}
+                    onChange={(v) => change("longVision", v)}
+                    onMode={(mode) =>
+                      change("visionModes", {
+                        ...data.visionModes,
+                        longVision: mode,
+                      })
+                    }
+                    placeholder="가지고 싶고, 하고 싶고, 되고 싶은 모습을 자유롭게 적어보세요."
+                  />
+                </div>
+                {cycle.status !== "complete" && (
+                  <VisionAssistant
+                    cycle={cycle}
+                    dirty={dirty}
+                    onSave={save}
+                    onRemote={acceptRemote}
+                  />
+                )}
+              </div>
             </section>
             <section className="panel">
               <SectionTitle
@@ -1193,6 +1290,17 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           </>
         )}
       </fieldset>
+      {tab === 0 && cycle.status === "complete" && (
+        <section className="panel">
+          <h2>보관된 비전 대화</h2>
+          <VisionAssistant
+            cycle={cycle}
+            dirty={false}
+            onSave={save}
+            onRemote={acceptRemote}
+          />
+        </section>
+      )}
       <footer className="plan-footer">
         <button
           className="text-button"
