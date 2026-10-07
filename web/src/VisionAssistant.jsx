@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "./api.js";
 import { selectedExportChats } from "../../shared/vision-ai.js";
+import { MarkdownContent } from "./MarkdownContent.jsx";
 import "./vision-ai.css";
 
 const providerName = {
@@ -359,16 +360,14 @@ export function VisionAssistant({ cycle, dirty, onSave, onRemote }) {
                   {m.role === "user" ? "나" : providerName[chat.provider]}
                   {m.imported && " · 가져온 대화"}
                 </small>
-                <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                <MarkdownContent>{m.content}</MarkdownContent>
                 {m.proposedVision !== null &&
                   m.proposedVision !== undefined && (
                     <details className="ai-proposal">
                       <summary>
                         {m.applied ? "반영한 비전 보기" : "비전 수정안 보기"}
                       </summary>
-                      <div style={{ whiteSpace: "pre-wrap" }}>
-                        {m.proposedVision}
-                      </div>
+                      <MarkdownContent>{m.proposedVision}</MarkdownContent>
                       {!m.applied && (
                         <Button
                           disabled={
@@ -781,13 +780,11 @@ export function VisionAssistant({ cycle, dirty, onSave, onRemote }) {
               <details>
                 <summary>수정 전후 보기</summary>
                 <h4>수정 전</h4>
-                <div style={{ whiteSpace: "pre-wrap" }}>
+                <MarkdownContent>
                   {e.before_text || "비어 있음"}
-                </div>
+                </MarkdownContent>
                 <h4>수정 후</h4>
-                <div style={{ whiteSpace: "pre-wrap" }}>
-                  {e.after_text || "비어 있음"}
-                </div>
+                <MarkdownContent>{e.after_text || "비어 있음"}</MarkdownContent>
               </details>
               <Button
                 disabled={

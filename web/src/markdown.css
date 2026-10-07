@@ -1,0 +1,156 @@
+.markdown-content {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -0.02em;
+  margin: 1.2em 0 0.5em;
+}
+.markdown-content h1 {
+  font-size: 21px;
+}
+.markdown-content h2 {
+  font-size: 18px;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--line);
+}
+.markdown-content h3 {
+  font-size: 16px;
+}
+.markdown-content :is(h4, h5, h6) {
+  font-size: 14px;
+}
+.markdown-content p {
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-line;
+  margin: 0.65em 0;
+}
+.markdown-content :is(ul, ol) {
+  margin: 0.65em 0;
+  padding-left: 1.6em;
+}
+.markdown-content li {
+  margin: 0.3em 0;
+}
+.markdown-content li > :is(ul, ol) {
+  margin: 0.25em 0;
+}
+.markdown-content li > p {
+  margin: 0.35em 0;
+}
+.markdown-content strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+.markdown-content a {
+  color: #326d4b;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.markdown-content a:hover {
+  color: var(--ink);
+}
+.markdown-content blockquote {
+  margin: 0.9em 0;
+  padding: 0.4em 0.9em;
+  border-left: 3px solid #91b686;
+  background: #f0f4ec;
+  border-radius: 0 6px 6px 0;
+  color: #526357;
+}
+.markdown-content blockquote > :first-child {
+  margin-top: 0;
+}
+.markdown-content blockquote > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #edf1e9;
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+}
+.markdown-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.9em 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #23382e;
+  color: #edf4e9;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.markdown-content pre code {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 12px;
+  white-space: inherit;
+}
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.2em 0;
+}
+.markdown-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.9em 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.markdown-content :is(th, td) {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  min-width: 100px;
+}
+.markdown-content :is(th, td):last-child {
+  border-right: 0;
+}
+.markdown-content tr:last-child td {
+  border-bottom: 0;
+}
+.markdown-content th {
+  background: #edf2e8;
+  color: var(--ink);
+  font-weight: 700;
+  text-align: left;
+}
+.markdown-content .contains-task-list {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.markdown-content .task-list-item input {
+  width: 14px;
+  height: 14px;
+  margin: 0 0.5em 0 0;
+  vertical-align: middle;
+  accent-color: #6b925f;
+}
+.markdown-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
