@@ -1,0 +1,189 @@
+.goal-vision-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.6fr);
+  gap: 24px;
+  align-items: start;
+}
+.goal-vision-workspace > * {
+  min-width: 0;
+}
+.vision-reference {
+  background: #f0f4e9;
+  padding: 24px;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.vision-reference h3 {
+  margin: 4px 0 12px;
+}
+.vision-reference > p,
+.vision-reference-empty,
+.vision-link-options > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.vision-reference section {
+  margin: 24px 0;
+}
+.vision-reference h4 {
+  color: #69835a;
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+.vision-reference ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.vision-reference li {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+.vision-reference li > span {
+  color: #8da377;
+  font:
+    15px Georgia,
+    serif;
+  padding-top: 3px;
+}
+.vision-reference li p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.goal-vision-links {
+  grid-column: 2;
+  min-width: 0;
+}
+.goal-vision-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.goal-vision-summary > p {
+  margin: 0 0 6px;
+  font-size: 10px;
+}
+.vision-link-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #f1f5ec;
+  border: 1px solid #e3ebda;
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.vision-link-chip small {
+  color: #7a916d;
+  font-size: 9px;
+}
+.vision-link-chip.missing {
+  background: #fff5eb;
+  border-color: #efdcca;
+}
+.vision-link-chip.missing small {
+  color: #a47550;
+}
+.vision-link-picker {
+  margin-top: 8px;
+}
+.vision-link-picker > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #6b835b;
+  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+  width: fit-content;
+}
+.vision-link-picker > summary::-webkit-details-marker {
+  display: none;
+}
+.vision-link-picker[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.vision-link-options {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.vision-link-options fieldset {
+  border: 0;
+  padding: 0;
+  margin: 14px 0;
+  min-width: 0;
+}
+.vision-link-options legend {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.vision-link-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.vision-link-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.vision-link-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vision-link-missing {
+  background: #fff7ef;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+  color: #9a714c;
+}
+.vision-link-missing > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+.vision-link-missing > div > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.goal-panel > .goal-vision-summary {
+  margin: -8px 0 24px;
+}
+@media (max-width: 1100px) {
+  .goal-vision-workspace {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .vision-reference {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 680px) {
+  .goal-vision-links {
+    grid-column: 1 / -1;
+  }
+  .vision-reference {
+    padding: 20px;
+  }
+}

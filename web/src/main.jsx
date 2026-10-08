@@ -50,6 +50,12 @@ import {
 } from "./PlanningWidgets.jsx";
 import "./style.css";
 import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
+import { updateVision } from "../../shared/vision-links.js";
+import {
+  VisionReference,
+  GoalVisionLinks,
+  GoalVisionSummary,
+} from "./GoalVisionLinks.jsx";
 
 function connectionRequest() {
   const raw = new URLSearchParams(location.search).get("ai_authorize");
@@ -722,6 +728,10 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     setData((p) => ({ ...p, [key]: value }));
     setDirty(true);
   };
+  const visionChange = (area, value, edit) => {
+    setData((p) => updateVision(p, area, value, edit));
+    setDirty(true);
+  };
   useEffect(() => {
     const listener = (e) => {
       if (dirty) {
@@ -1012,9 +1022,12 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
               <div className="two-col">
                 <VisionEditor
                   label="개인 생활의 비전"
+                  linkable
                   value={data.personalVision}
                   mode={data.visionModes.personalVision}
-                  onChange={(v) => change("personalVision", v)}
+                  onChange={(v, edit) =>
+                    visionChange("personalVision", v, edit)
+                  }
                   onMode={(mode) =>
                     change("visionModes", {
                       ...data.visionModes,
@@ -1024,9 +1037,10 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 />
                 <VisionEditor
                   label="커리어의 비전"
+                  linkable
                   value={data.careerVision}
                   mode={data.visionModes.careerVision}
-                  onChange={(v) => change("careerVision", v)}
+                  onChange={(v, edit) => visionChange("careerVision", v, edit)}
                   onMode={(mode) =>
                     change("visionModes", {
                       ...data.visionModes,
@@ -1044,61 +1058,72 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             <SectionTitle
               number="03"
               title={`이번 ${weekCount}주의 목표`}
-              description="프로젝트와 가치관에서 후보를 찾고, 이루고 싶은 결과를 먼저 나열하세요. 전체 목표를 함께 본 뒤, 다음 화면에서 목표별 계획을 세웁니다."
+              description="3년 비전을 보면서 이번에 이루고 싶은 결과를 먼저 나열하세요. 목표가 어떤 비전에 연결되는지 선택하고, 다음 화면에서 목표별 계획을 세웁니다."
             />
-            <section
-              className="panel goal-list-panel"
-              aria-label={`${weekCount}주 목표 목록`}
-            >
-              <div className="goal-list">
-                {data.goals.map((g, index) => (
-                  <div className="goal-list-row" key={g.id}>
-                    <span className="goal-list-number" aria-hidden="true">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <Field
-                      label={`${weekCount}주 목표 ${index + 1}`}
-                      placeholder={`${weekCount}주 뒤 이루고 싶은 결과는 무엇인가요?`}
-                      value={g.title}
-                      onChange={(e) =>
-                        goalChange(g.id, "title", e.target.value)
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="icon-button danger"
-                      aria-label={`목표 ${index + 1} 삭제`}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "이 목표를 계획에서 삭제할까요? 이미 시작한 주의 기준은 유지됩니다.",
-                          )
-                        )
-                          change(
-                            "goals",
-                            data.goals.filter((x) => x.id !== g.id),
-                          );
-                      }}
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <Button
-                variant="light"
-                onClick={() =>
-                  change("goals", [...data.goals, newGoal(weekCount)])
-                }
+            <div className="goal-vision-workspace">
+              <VisionReference plan={data} onEdit={() => setTab(0)} />
+              <section
+                className="panel goal-list-panel"
+                aria-label={`${weekCount}주 목표 목록`}
               >
-                <Plus size={17} />
-                {weekCount}주 목표 추가
-              </Button>
-              <p className="goal-list-note">
-                지금은 목표 전체의 방향을 봅니다. 성공 기준과 실행 방법은 다음
-                화면에서 구체화해요.
-              </p>
-            </section>
+                <div className="goal-list">
+                  {data.goals.map((g, index) => (
+                    <div className="goal-list-row" key={g.id}>
+                      <span className="goal-list-number" aria-hidden="true">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <Field
+                        label={`${weekCount}주 목표 ${index + 1}`}
+                        placeholder={`${weekCount}주 뒤 이루고 싶은 결과는 무엇인가요?`}
+                        value={g.title}
+                        onChange={(e) =>
+                          goalChange(g.id, "title", e.target.value)
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="icon-button danger"
+                        aria-label={`목표 ${index + 1} 삭제`}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "이 목표를 계획에서 삭제할까요? 이미 시작한 주의 기준은 유지됩니다.",
+                            )
+                          )
+                            change(
+                              "goals",
+                              data.goals.filter((x) => x.id !== g.id),
+                            );
+                        }}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                      <GoalVisionLinks
+                        plan={data}
+                        goal={g}
+                        number={index + 1}
+                        onChange={(links) =>
+                          goalChange(g.id, "visionLinks", links)
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="light"
+                  onClick={() =>
+                    change("goals", [...data.goals, newGoal(weekCount)])
+                  }
+                >
+                  <Plus size={17} />
+                  {weekCount}주 목표 추가
+                </Button>
+                <p className="goal-list-note">
+                  지금은 목표 전체의 방향을 봅니다. 성공 기준과 실행 방법은 다음
+                  화면에서 구체화해요.
+                </p>
+              </section>
+            </div>
           </>
         )}
         {tab === 2 && selectedGoal && (
@@ -1120,6 +1145,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 <h2 className="goal-plan-title">
                   {g.title.trim() || "이름 없는 목표"}
                 </h2>
+                <GoalVisionSummary plan={data} goal={g} />
                 <div className="two-col">
                   <Field
                     label="성공 기준"

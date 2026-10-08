@@ -2,6 +2,7 @@ import { z } from "zod";
 import { dateOnly, MAX_WEEK_COUNT } from "../shared/domain.js";
 const text = z.string().max(6000);
 const id = z.uuid();
+const visionArea = z.enum(["personalVision", "careerVision"]);
 export const dateSchema = z.string().refine((v) => {
   try {
     return dateOnly(v);
@@ -28,6 +29,16 @@ const goal = z.object({
   leading: text,
   lagging: text,
   measurement: text,
+  visionLinks: z
+    .array(z.object({ area: visionArea, itemId: id, text }))
+    .max(6001)
+    .refine(
+      (links) =>
+        new Set(links.map((link) => `${link.area}:${link.itemId}`)).size ===
+        links.length,
+      "같은 비전 항목을 중복 연결할 수 없습니다.",
+    )
+    .optional(),
   tactics: z.array(tactic).max(50),
   difficulties: z
     .array(
@@ -45,6 +56,12 @@ export const planSchema = z
     longVision: text,
     personalVision: text,
     careerVision: text,
+    visionItems: z
+      .object({
+        personalVision: z.array(z.object({ id, text })).max(6001),
+        careerVision: z.array(z.object({ id, text })).max(6001),
+      })
+      .optional(),
     visionModes: z
       .object({
         longVision: z.enum(["list", "text"]),
@@ -87,6 +104,23 @@ export const planSchema = z
       .max(150),
   })
   .superRefine((p, ctx) => {
+    if (p.visionItems) {
+      const ids = Object.values(p.visionItems)
+        .flat()
+        .map((item) => item.id);
+      if (new Set(ids).size !== ids.length)
+        ctx.addIssue({
+          code: "custom",
+          message: "비전 항목 ID는 서로 달라야 합니다.",
+        });
+      for (const area of ["personalVision", "careerVision"])
+        if (p.visionItems[area].map((item) => item.text).join("\n") !== p[area])
+          ctx.addIssue({
+            code: "custom",
+            path: ["visionItems", area],
+            message: "비전 내용과 항목이 일치하지 않습니다.",
+          });
+    }
     const ids = [
       ...p.goals.map((g) => g.id),
       ...p.goals.flatMap((g) => g.tactics.map((t) => t.id)),

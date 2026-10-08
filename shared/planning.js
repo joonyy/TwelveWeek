@@ -1,3 +1,4 @@
+import { VISION_AREAS, visionItems } from "./vision-links.js";
 const uid = () => crypto.randomUUID();
 export const VISION_MODES = {
   longVision: "list",
@@ -29,6 +30,7 @@ export const newGoal = (weekCount = 12) => ({
   leading: "",
   lagging: "",
   measurement: "",
+  visionLinks: [],
   tactics: [newTactic(weekCount)],
   difficulties: [{ id: uid(), tacticId: "", obstacle: "", response: "" }],
 });
@@ -61,6 +63,12 @@ export function hasGoalContent(g) {
 export function editablePlan(plan, { draft = true, weekCount = 12 } = {}) {
   const copy = structuredClone(plan);
   copy.visionModes = { ...VISION_MODES, ...copy.visionModes };
+  copy.visionItems = Object.fromEntries(
+    VISION_AREAS.map(({ key }) => [
+      key,
+      visionItems(copy[key], copy.visionItems?.[key]),
+    ]),
+  );
   copy.responsibilityActions = {
     personal: "",
     business: "",
@@ -70,6 +78,7 @@ export function editablePlan(plan, { draft = true, weekCount = 12 } = {}) {
     copy.goals = Array.from({ length: 3 }, () => newGoal(weekCount));
   copy.goals = copy.goals.map((g) => ({
     ...g,
+    visionLinks: g.visionLinks ?? [],
     tactics: g.tactics.length ? g.tactics : [newTactic(weekCount)],
     difficulties: g.difficulties.length
       ? g.difficulties

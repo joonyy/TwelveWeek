@@ -22,8 +22,8 @@ export function ListInput({
 }) {
   const inputs = useRef([]),
     items = value.split("\n");
-  function update(next, focus) {
-    onChange(next.join("\n"));
+  function update(next, focus, edit) {
+    onChange(next.join("\n"), edit);
     if (focus !== undefined)
       requestAnimationFrame(() => inputs.current[focus]?.focus());
   }
@@ -43,7 +43,11 @@ export function ListInput({
               value={item}
               placeholder={placeholder}
               onChange={(e) =>
-                update(items.map((s, j) => (j === i ? e.target.value : s)))
+                update(
+                  items.map((s, j) => (j === i ? e.target.value : s)),
+                  undefined,
+                  { index: i, remove: 1, insert: 1 },
+                )
               }
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData("text/plain");
@@ -54,11 +58,15 @@ export function ListInput({
                   item.slice(0, el.selectionStart) +
                   pasted.replaceAll("\r\n", "\n") +
                   item.slice(el.selectionEnd);
-                update([
-                  ...items.slice(0, i),
-                  ...merged.split("\n"),
-                  ...items.slice(i + 1),
-                ]);
+                update(
+                  [
+                    ...items.slice(0, i),
+                    ...merged.split("\n"),
+                    ...items.slice(i + 1),
+                  ],
+                  undefined,
+                  { index: i, remove: 1, insert: merged.split("\n").length },
+                );
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -66,6 +74,7 @@ export function ListInput({
                   update(
                     [...items.slice(0, i + 1), "", ...items.slice(i + 1)],
                     i + 1,
+                    { index: i + 1, remove: 0, insert: 1 },
                   );
                 }
                 if (e.key === "Backspace" && !item && items.length > 1) {
@@ -73,6 +82,7 @@ export function ListInput({
                   update(
                     items.filter((_, j) => j !== i),
                     Math.max(0, i - 1),
+                    { index: i, remove: 1, insert: 0 },
                   );
                 }
               }}
@@ -85,6 +95,12 @@ export function ListInput({
                 update(
                   items.length > 1 ? items.filter((_, j) => j !== i) : [""],
                   Math.max(0, i - 1),
+                  {
+                    index: i,
+                    remove: 1,
+                    insert: items.length > 1 ? 0 : 1,
+                    preserve: false,
+                  },
                 )
               }
             >
@@ -96,7 +112,13 @@ export function ListInput({
       <button
         type="button"
         className="text-button"
-        onClick={() => update([...items, ""], items.length)}
+        onClick={() =>
+          update([...items, ""], items.length, {
+            index: items.length,
+            remove: 0,
+            insert: 1,
+          })
+        }
       >
         <Plus size={15} />
         항목 추가
@@ -114,6 +136,7 @@ export function VisionEditor({
   onChange,
   onMode,
   placeholder,
+  linkable = false,
 }) {
   return (
     <section className="vision-editor" aria-label={label}>
@@ -157,6 +180,11 @@ export function VisionEditor({
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
+      )}
+      {linkable && mode === "text" && (
+        <small className="list-keyboard-hint">
+          목표와 연결할 내용을 줄바꿈으로 나눠 적어주세요.
+        </small>
       )}
     </section>
   );

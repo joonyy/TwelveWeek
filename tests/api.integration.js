@@ -6,6 +6,8 @@ import { createPool } from "../server/db.js";
 import { migrate } from "../server/migrate.js";
 import { createApp } from "../server/app.js";
 import { emptyPlan } from "../shared/domain.js";
+import { editablePlan } from "../shared/planning.js";
+import { updateVision } from "../shared/vision-links.js";
 const url = process.env.TEST_DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith("_test"))
   throw new Error(
@@ -416,6 +418,104 @@ test("new editor persists modes and wheel choices, ignores blank starter goals a
   assert.equal(saved.plan.commitments[0].accepted, true);
   assert.equal(saved.plan.responsibilityActions.business, "실천");
   assert.equal(saved.plan.longVision, "첫 비전\n두 번째 비전");
+});
+test("goal vision links persist, remain owned, preserve deleted references and leave frozen execution unchanged", async () => {
+  const profile = (await call("post", "/profiles", { name: "비전 연결 검증" }))
+    .body;
+  const who = (await call("post", "/sessions", { profileId: profile.id })).body
+    .token;
+  let p = editablePlan({
+    ...emptyPlan(11),
+    personalVision: "회복이 있는 생활",
+    careerVision: "내 서비스 운영\n누적되는 자산",
+  });
+  const item = p.visionItems.careerVision[1];
+  p.goals[0].title = "실제 사용 시험";
+  Object.assign(p.goals[0].tactics[0], {
+    title: "사용 후 기록",
+    condition: "한 건 저장",
+  });
+  p.goals[0].visionLinks = [
+    { area: "careerVision", itemId: item.id, text: item.text },
+  ];
+  const draft = (
+    await call(
+      "post",
+      "/cycles",
+      { title: "비전 연결", startDate: "2026-10-05", weekCount: 11, plan: p },
+      who,
+    ).expect(201)
+  ).body;
+  assert.deepEqual(draft.plan, p);
+  const active = (
+    await call(
+      "post",
+      `/cycles/${draft.id}/start`,
+      { version: draft.version },
+      who,
+    ).expect(200)
+  ).body;
+  const baseline = (
+    await call("get", `/cycles/${active.id}/weeks/1`, null, who).expect(200)
+  ).body;
+  p = updateVision(p, "careerVision", "내 서비스 운영\n나에게 누적되는 자산", {
+    index: 1,
+    remove: 1,
+    insert: 1,
+  });
+  let saved = (
+    await call(
+      "put",
+      `/cycles/${active.id}`,
+      {
+        title: active.title,
+        startDate: active.start_date,
+        weekCount: 11,
+        plan: p,
+        version: active.version,
+      },
+      who,
+    ).expect(200)
+  ).body;
+  assert.equal(saved.plan.goals[0].visionLinks[0].itemId, item.id);
+  assert.equal(saved.plan.goals[0].visionLinks[0].text, "나에게 누적되는 자산");
+  p = updateVision(p, "careerVision", "내 서비스 운영", {
+    index: 1,
+    remove: 1,
+    insert: 0,
+  });
+  saved = (
+    await call(
+      "put",
+      `/cycles/${active.id}`,
+      {
+        title: saved.title,
+        startDate: saved.start_date,
+        weekCount: 11,
+        plan: p,
+        version: saved.version,
+      },
+      who,
+    ).expect(200)
+  ).body;
+  const restored = (
+    await call("get", `/cycles/${active.id}`, null, who).expect(200)
+  ).body;
+  assert.deepEqual(restored.plan, p);
+  assert.equal(
+    restored.plan.goals[0].visionLinks[0].text,
+    "나에게 누적되는 자산",
+  );
+  assert.equal(
+    restored.plan.visionItems.careerVision.some((v) => v.id === item.id),
+    false,
+  );
+  const after = (
+    await call("get", `/cycles/${active.id}/weeks/1`, null, who).expect(200)
+  ).body;
+  assert.deepEqual(after.state, baseline.state);
+  assert.deepEqual(after.score, baseline.score);
+  await call("get", `/cycles/${active.id}`, null, other).expect(404);
 });
 test("sessions can be revoked and expired tokens cannot resume", async () => {
   await call("delete", "/sessions/current", null, other).expect(204);
