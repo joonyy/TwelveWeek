@@ -48,9 +48,13 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
     path: "test-results/06-vision-lists.png",
     fullPage: true,
   });
-  await page.getByRole("tab", { name: "목표와 12주 계획" }).click();
-  await expect(page.locator(".goal-panel")).toHaveCount(3);
-  await expect(page.getByLabel("전술 이름")).toHaveCount(3);
+  await page.getByRole("tab", { name: "12주 목표" }).click();
+  await expect(page.locator(".goal-list-row")).toHaveCount(3);
+  await expect(page.getByLabel("전술 이름")).toHaveCount(0);
+  await page.getByLabel("12주 목표 1", { exact: true }).fill("꾸준히 실행하기");
+  await page.getByRole("button", { name: "12주 계획 세우기" }).click();
+  await expect(page.locator(".goal-panel")).toHaveCount(1);
+  await expect(page.getByLabel("전술 이름")).toHaveCount(1);
   await page.getByRole("tab", { name: "모범 주간" }).click();
   await page
     .getByRole("button", { name: "월요일 09:00 블록 추가", exact: true })

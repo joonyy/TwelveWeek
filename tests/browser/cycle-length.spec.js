@@ -22,14 +22,14 @@ test("eleven-week setup, execution navigation and reflection follow the chosen p
   await page
     .getByRole("textbox", { name: "장기 비전 1", exact: true })
     .fill("실행을 누적하는 삶");
-  await page.getByRole("tab", { name: "목표와 11주 계획" }).click();
+  await page.getByRole("tab", { name: "11주 목표" }).click();
+  await page
+    .getByLabel("11주 목표 1", { exact: true })
+    .fill("실제로 사용한 결과를 남긴다");
+  await page.getByRole("button", { name: "11주 계획 세우기" }).click();
   await expect(
     page.locator(".week-chips").first().getByRole("button"),
   ).toHaveCount(11);
-  await page
-    .getByLabel("03. 11주 목표")
-    .first()
-    .fill("실제로 사용한 결과를 남긴다");
   await page.getByLabel("전술 이름").first().fill("주간 실행 한 건");
   await page.getByLabel("1회 완료 조건").first().fill("결과 기록 한 건 저장");
   await page.getByRole("button", { name: "저장", exact: true }).click();

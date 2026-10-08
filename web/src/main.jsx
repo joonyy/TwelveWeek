@@ -38,6 +38,7 @@ import {
   newTactic,
   editablePlan,
   hasGoalContent,
+  hasTacticContent,
   planWithinWeeks,
 } from "../../shared/planning.js";
 import {
@@ -691,10 +692,20 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     [start, setStart] = useState(cycle.start_date),
     [weekCount, setWeekCount] = useState(cycleWeeks(cycle)),
     [tab, setTab] = useState(0),
+    [selectedGoalId, setSelectedGoalId] = useState(null),
     [dirty, setDirty] = useState(false),
     [starting, setStarting] = useState(false),
     [remoteCycle, setRemoteCycle] = useState(null);
-  const tabs = ["비전", `목표와 ${weekCount}주 계획`, "모범 주간", "삶의 태도"];
+  const tabs = [
+    "비전",
+    `${weekCount}주 목표`,
+    `${weekCount}주 계획`,
+    "모범 주간",
+    "삶의 태도",
+  ];
+  const planningGoals = data.goals.filter(hasGoalContent);
+  const selectedGoal =
+    planningGoals.find((g) => g.id === selectedGoalId) || planningGoals[0];
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(start);
   const minimumWeeks =
     cycle.status === "active"
@@ -906,6 +917,56 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           </Button>
         </div>
       )}
+      {tab === 2 && (
+        <>
+          <Guide ids={["plan", "commitment"]} />
+          <SectionTitle
+            number="04–07"
+            title={`목표별 ${weekCount}주 계획`}
+            description="목표 전체를 보면서, 각 목표를 이루기 위한 행동을 정하세요. 목표를 선택하면 그 목표의 계획을 이어서 작성할 수 있어요."
+          />
+          <div className="goal-plan-overview">
+            <div className="section-heading">
+              <p className="muted">
+                이번 {weekCount}주의 목표 {planningGoals.length}개
+              </p>
+              <Button variant="light" onClick={() => setTab(1)}>
+                <ChevronLeft size={15} />
+                목표 목록 수정
+              </Button>
+            </div>
+            {planningGoals.length ? (
+              <nav className="goal-plan-selector" aria-label="목표별 계획 선택">
+                {planningGoals.map((g) => (
+                  <button
+                    type="button"
+                    className="goal-plan-choice"
+                    key={g.id}
+                    aria-pressed={selectedGoal?.id === g.id}
+                    onClick={() => setSelectedGoalId(g.id)}
+                  >
+                    <span className="eyebrow">
+                      GOAL{" "}
+                      {String(
+                        data.goals.findIndex((x) => x.id === g.id) + 1,
+                      ).padStart(2, "0")}
+                    </span>
+                    <strong>{g.title.trim() || "이름 없는 목표"}</strong>
+                    <small>
+                      전술 {g.tactics.filter(hasTacticContent).length}개
+                    </small>
+                  </button>
+                ))}
+              </nav>
+            ) : (
+              <p className="goal-plan-empty">
+                먼저 목표 화면에서 이번 {weekCount}주에 이루고 싶은 목표를
+                나열해주세요.
+              </p>
+            )}
+          </div>
+        </>
+      )}
       <fieldset disabled={cycle.status === "complete"} className="plan-fields">
         {tab === 0 && (
           <>
@@ -979,42 +1040,86 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
         )}
         {tab === 1 && (
           <>
-            <Guide ids={["plan", "commitment"]} />
+            <Guide ids={["vision"]} />
             <SectionTitle
-              number="03–07"
-              title={`${weekCount}주 목표와 목표별 계획`}
-              description={`프로젝트와 가치관에서 후보를 찾고, 이번 ${weekCount}주에 실제로 변화를 만들 목표를 선택하세요. 목표마다 전술·장애물·지표를 따로 작성합니다.`}
+              number="03"
+              title={`이번 ${weekCount}주의 목표`}
+              description="프로젝트와 가치관에서 후보를 찾고, 이루고 싶은 결과를 먼저 나열하세요. 전체 목표를 함께 본 뒤, 다음 화면에서 목표별 계획을 세웁니다."
             />
-            {data.goals.map((g, index) => (
-              <section className="panel goal-panel" key={g.id}>
+            <section
+              className="panel goal-list-panel"
+              aria-label={`${weekCount}주 목표 목록`}
+            >
+              <div className="goal-list">
+                {data.goals.map((g, index) => (
+                  <div className="goal-list-row" key={g.id}>
+                    <span className="goal-list-number" aria-hidden="true">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <Field
+                      label={`${weekCount}주 목표 ${index + 1}`}
+                      placeholder={`${weekCount}주 뒤 이루고 싶은 결과는 무엇인가요?`}
+                      value={g.title}
+                      onChange={(e) =>
+                        goalChange(g.id, "title", e.target.value)
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="icon-button danger"
+                      aria-label={`목표 ${index + 1} 삭제`}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "이 목표를 계획에서 삭제할까요? 이미 시작한 주의 기준은 유지됩니다.",
+                          )
+                        )
+                          change(
+                            "goals",
+                            data.goals.filter((x) => x.id !== g.id),
+                          );
+                      }}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="light"
+                onClick={() =>
+                  change("goals", [...data.goals, newGoal(weekCount)])
+                }
+              >
+                <Plus size={17} />
+                {weekCount}주 목표 추가
+              </Button>
+              <p className="goal-list-note">
+                지금은 목표 전체의 방향을 봅니다. 성공 기준과 실행 방법은 다음
+                화면에서 구체화해요.
+              </p>
+            </section>
+          </>
+        )}
+        {tab === 2 && selectedGoal && (
+          <>
+            {[selectedGoal].map((g) => (
+              <section
+                className="panel goal-panel"
+                key={g.id}
+                aria-label={`${g.title.trim() || "이름 없는 목표"} 계획`}
+              >
                 <header className="section-heading">
                   <span className="eyebrow">
-                    GOAL {String(index + 1).padStart(2, "0")}
+                    GOAL{" "}
+                    {String(
+                      data.goals.findIndex((x) => x.id === g.id) + 1,
+                    ).padStart(2, "0")}
                   </span>
-                  <button
-                    className="text-button danger"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "이 목표를 계획에서 삭제할까요? 이미 시작한 주의 기준은 유지됩니다.",
-                        )
-                      )
-                        change(
-                          "goals",
-                          data.goals.filter((x) => x.id !== g.id),
-                        );
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    목표 삭제
-                  </button>
                 </header>
-                <Field
-                  label={`03. ${weekCount}주 목표`}
-                  placeholder={`${weekCount}주 뒤 어떤 결과에 도달할 것인가요?`}
-                  value={g.title}
-                  onChange={(e) => goalChange(g.id, "title", e.target.value)}
-                />
+                <h2 className="goal-plan-title">
+                  {g.title.trim() || "이름 없는 목표"}
+                </h2>
                 <div className="two-col">
                   <Field
                     label="성공 기준"
@@ -1195,18 +1300,9 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 />
               </section>
             ))}
-            <Button
-              variant="outlined"
-              onClick={() =>
-                change("goals", [...data.goals, newGoal(weekCount)])
-              }
-            >
-              <Plus size={18} />
-              {weekCount}주 목표 추가
-            </Button>
           </>
         )}
-        {tab === 2 && (
+        {tab === 3 && (
           <>
             <Guide ids={["time", "process"]} />
             <section className="panel">
@@ -1224,7 +1320,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             </section>
           </>
         )}
-        {tab === 3 && (
+        {tab === 4 && (
           <>
             <Guide ids={["ownership", "commitment", "moment"]} />
             <section className="panel">
@@ -1310,10 +1406,12 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           <ChevronLeft size={18} />
           이전
         </button>
-        <span>{tab + 1} / 4</span>
-        {tab < 3 ? (
+        <span>
+          {tab + 1} / {tabs.length}
+        </span>
+        {tab < tabs.length - 1 ? (
           <Button variant="light" onClick={() => setTab(tab + 1)}>
-            다음
+            {tab === 1 ? `${weekCount}주 계획 세우기` : "다음"}
             <ChevronRight size={18} />
           </Button>
         ) : cycle.status === "draft" ? (

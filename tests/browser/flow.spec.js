@@ -30,9 +30,12 @@ test("profile → guided plan → schedule → binary execution → weekly revie
   await page
     .getByRole("textbox", { name: "커리어의 비전 1", exact: true })
     .fill("내가 쓰는 서비스를 다른 사람도 쓰도록 발전시킨다.");
-  await page.getByRole("tab", { name: "목표와 12주 계획" }).click();
-  await expect(page.locator(".goal-panel")).toHaveCount(3);
-  await page.getByLabel("03. 12주 목표").first().fill("지속 가능한 러닝 습관");
+  await page.getByRole("tab", { name: "12주 목표" }).click();
+  await expect(page.locator(".goal-list-row")).toHaveCount(3);
+  await page
+    .getByLabel("12주 목표 1", { exact: true })
+    .fill("지속 가능한 러닝 습관");
+  await page.getByRole("button", { name: "12주 계획 세우기" }).click();
   await page
     .getByLabel("성공 기준", { exact: true })
     .first()
