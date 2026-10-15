@@ -4,6 +4,8 @@ test("profile → guided plan → schedule → binary execution → weekly revie
 }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // Match the API test server's date so the default week stays deterministic.
+  await page.clock.setFixedTime(new Date("2026-10-07T12:00:00+09:00"));
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "유저를 선택하세요." }),
