@@ -617,6 +617,63 @@ main {
   font-size: 10px;
   color: #8b977f;
 }
+.floating-save {
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #ffffff30;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 6px 20px #173d3130;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.floating-save:hover:not(:disabled) {
+  background: #285443;
+  box-shadow: 0 8px 24px #173d3140;
+}
+.floating-save:disabled {
+  opacity: 1;
+  background: #e5eadf;
+  color: #708063;
+  border-color: #d7dfd0;
+  box-shadow: 0 3px 12px #173d3114;
+}
+.floating-save.has-changes::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.floating-save[aria-busy="true"]::after {
+  display: none;
+}
+.save-spinner {
+  animation: save-spin 0.8s linear infinite;
+}
+@keyframes save-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .save-spinner {
+    animation: none;
+  }
+}
 .tabs {
   display: flex;
   overflow-x: auto;
@@ -895,6 +952,7 @@ main {
   justify-content: space-between;
   border-top: 1px solid var(--line);
   padding: 25px 0;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   font-size: 12px;
   color: var(--muted);
 }
@@ -1685,6 +1743,16 @@ main {
   }
 }
 @media (max-width: 560px) {
+  .floating-save {
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .toast {
+    left: 16px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    transform: none;
+    max-width: calc(100vw - 104px - env(safe-area-inset-right, 0px));
+  }
   h1 {
     font-size: 27px;
   }

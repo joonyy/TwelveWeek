@@ -15,6 +15,7 @@ import {
   X,
   Download,
   Save,
+  LoaderCircle,
   CircleHelp,
   Trash2,
   Clock3,
@@ -711,6 +712,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     [tab, setTab] = useState(0),
     [selectedGoalId, setSelectedGoalId] = useState(null),
     [dirty, setDirty] = useState(false),
+    [saving, setSaving] = useState(false),
     [starting, setStarting] = useState(false),
     [remoteCycle, setRemoteCycle] = useState(null);
   const tabs = [
@@ -754,20 +756,25 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     return () => window.removeEventListener("beforeunload", listener);
   }, [dirty]);
   async function save() {
-    const c = await api(`/cycles/${cycle.id}`, {
-      method: "PUT",
-      body: {
-        title,
-        startDate: start,
-        weekCount,
-        plan: data,
-        version: cycle.version,
-      },
-    });
-    setCycle(c);
-    setDirty(false);
-    notify("계획을 저장했어요.");
-    return c;
+    setSaving(true);
+    try {
+      const c = await api(`/cycles/${cycle.id}`, {
+        method: "PUT",
+        body: {
+          title,
+          startDate: start,
+          weekCount,
+          plan: data,
+          version: cycle.version,
+        },
+      });
+      setCycle(c);
+      setDirty(false);
+      notify("계획을 저장했어요.");
+      return c;
+    } finally {
+      setSaving(false);
+    }
   }
   const acceptRemote = (fresh) => {
     if (fresh.version <= cycle.version) return;
@@ -1504,6 +1511,33 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           </Button>
         )}
       </footer>
+      {cycle.status !== "complete" && (
+        <button
+          type="button"
+          className={`floating-save${dirty ? " has-changes" : ""}`}
+          aria-label="계획 저장"
+          aria-busy={saving}
+          title={
+            saving
+              ? "저장 중…"
+              : dirty
+                ? "변경한 계획 저장"
+                : "변경사항이 모두 저장됐어요"
+          }
+          disabled={busy || saving || !dirty}
+          onClick={() => run(save)}
+        >
+          {saving ? (
+            <LoaderCircle
+              size={24}
+              className="save-spinner"
+              aria-hidden="true"
+            />
+          ) : (
+            <Save size={24} aria-hidden="true" />
+          )}
+        </button>
+      )}
       {starting && (
         <Modal
           title={`이번 ${weekCount}주를 시작할까요?`}
