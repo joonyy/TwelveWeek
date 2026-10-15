@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useId } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowUpRight,
@@ -50,6 +50,7 @@ import {
 } from "./PlanningWidgets.jsx";
 import "./style.css";
 import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
+import WritingGuide from "./WritingGuide.jsx";
 import { updateVision } from "../../shared/vision-links.js";
 import {
   VisionReference,
@@ -77,14 +78,24 @@ const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
 const shortDate = (d) => `${Number(d.slice(5, 7))}.${Number(d.slice(8, 10))}`;
 const range = (start, end) => `${shortDate(start)} — ${shortDate(end)}`;
 function Field({ label, hint, area = false, ...props }) {
+  const hintId = useId();
   return (
     <label className="field">
       <span>{label}</span>
-      {hint && <small>{hint}</small>}
+      {hint && <small id={hintId}>{hint}</small>}
       {area ? (
-        <textarea aria-label={label} rows={3} {...props} />
+        <textarea
+          aria-label={label}
+          aria-describedby={hint ? hintId : undefined}
+          rows={3}
+          {...props}
+        />
       ) : (
-        <input aria-label={label} {...props} />
+        <input
+          aria-label={label}
+          aria-describedby={hint ? hintId : undefined}
+          {...props}
+        />
       )}
     </label>
   );
@@ -987,6 +998,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="원대한 장기 비전"
                 description="지금 가능한 것부터 검열하지 말고, 살고 싶은 삶을 최대한 펼쳐보세요."
               />
+              <WritingGuide step="longVision" weekCount={weekCount} />
               <div className="vision-workspace">
                 <div>
                   <VisionEditor
@@ -1019,6 +1031,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="3년 뒤의 나"
                 description="장기 비전에 가까워진 모습을 개인 생활과 일의 관점에서 구체화하세요."
               />
+              <WritingGuide step="threeYear" weekCount={weekCount} />
               <div className="two-col">
                 <VisionEditor
                   label="개인 생활의 비전"
@@ -1066,6 +1079,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 className="panel goal-list-panel"
                 aria-label={`${weekCount}주 목표 목록`}
               >
+                <WritingGuide step="goals" weekCount={weekCount} />
                 <div className="goal-list">
                   {data.goals.map((g, index) => (
                     <div className="goal-list-row" key={g.id}>
@@ -1147,24 +1161,30 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 </h2>
                 <GoalVisionSummary plan={data} goal={g} />
                 <div className="two-col">
-                  <Field
-                    label="성공 기준"
-                    hint="달성 여부를 알 수 있는 구체적인 결과와 기준"
-                    area
-                    value={g.success}
-                    onChange={(e) =>
-                      goalChange(g.id, "success", e.target.value)
-                    }
-                  />
-                  <Field
-                    label="04. 성취했을 때 얻는 변화"
-                    hint="왜 이 목표에 시간과 노력을 쓰고 싶은가요?"
-                    area
-                    value={g.benefit}
-                    onChange={(e) =>
-                      goalChange(g.id, "benefit", e.target.value)
-                    }
-                  />
+                  <div className="writing-section">
+                    <WritingGuide step="success" weekCount={weekCount} />
+                    <Field
+                      label="성공 기준"
+                      hint="무엇이 얼마나 달라지면 달성인가요? 수치·성과물·확인 방법을 적어보세요."
+                      area
+                      value={g.success}
+                      onChange={(e) =>
+                        goalChange(g.id, "success", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="writing-section">
+                    <WritingGuide step="benefit" weekCount={weekCount} />
+                    <Field
+                      label="04. 성취했을 때 얻는 변화"
+                      hint="이 변화가 나에게 중요한 이유와 연결된 비전을 함께 떠올려보세요."
+                      area
+                      value={g.benefit}
+                      onChange={(e) =>
+                        goalChange(g.id, "benefit", e.target.value)
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="subheading">
                   <h3>05. {weekCount}주 계획</h3>
@@ -1173,6 +1193,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                     판단할 수 있어야 합니다.
                   </p>
                 </div>
+                <WritingGuide step="tactics" weekCount={weekCount} />
                 {g.tactics.map((t, ti) => (
                   <TacticEditor
                     key={t.id}
@@ -1214,6 +1235,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                     연결해보세요.
                   </p>
                 </div>
+                <WritingGuide step="obstacles" weekCount={weekCount} />
                 {g.difficulties.map((d) => (
                   <div className="obstacle" key={d.id}>
                     <label className="field">
@@ -1248,6 +1270,11 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                         <Field
                           key={key}
                           label={label}
+                          hint={
+                            key === "obstacle"
+                              ? "어떤 상황에서 이 전술을 실행하기 어려울까요?"
+                              : "그 상황이 생기면 내가 취할 행동을 구체적으로 적으세요."
+                          }
                           area
                           value={d[key]}
                           onChange={(e) =>
@@ -1297,9 +1324,11 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                     지표로 확인하세요.
                   </p>
                 </div>
+                <WritingGuide step="metrics" weekCount={weekCount} />
                 <div className="two-col">
                   <Field
                     label="선행지표 · 내가 실행할 행동"
+                    hint="원하는 결과를 만드는 행동을 얼마나 실행했는지 확인합니다."
                     placeholder="예: 매주 러닝 3회"
                     area
                     value={g.leading}
@@ -1309,6 +1338,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                   />
                   <Field
                     label="후행지표 · 나타난 결과"
+                    hint="행동의 결과로 목표에 얼마나 가까워졌는지 확인합니다."
                     placeholder="예: 체중 변화, 완성된 결과물"
                     area
                     value={g.lagging}
@@ -1319,6 +1349,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 </div>
                 <Field
                   label="측정 방법과 확인 주기"
+                  hint="무엇으로 확인하고 어디에 기록할지, 언제 비교할지 정하세요."
                   value={g.measurement}
                   onChange={(e) =>
                     goalChange(g.id, "measurement", e.target.value)
@@ -1337,6 +1368,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="모범 주간"
                 description="월요일부터 일요일까지, 가장 생산적인 한 주를 캘린더에 그려보세요. 중요한 활동과 작은 업무, 재충전 시간을 함께 배치합니다."
               />
+              <WritingGuide step="modelWeek" weekCount={weekCount} />
               <ModelWeekEditor
                 blocks={data.modelWeek}
                 onChange={(v) => change("modelWeek", v)}
@@ -1355,6 +1387,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="책임을 실천하는 태도"
                 description="정리본의 네 가지 태도를 떠올리며, 개인 생활과 일에서 실천할 노력을 적어보세요."
               />
+              <WritingGuide step="responsibility" weekCount={weekCount} />
               <ResponsibilityEditor
                 value={data.responsibilityActions}
                 legacy={data.responsibility}
@@ -1368,6 +1401,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="지켜냈던 두 번의 약속"
                 description="과거에 헌신했던 경험에서, 실행할 때 도움이 되었던 조건을 찾아보세요."
               />
+              <WritingGuide step="pastCommitments" weekCount={weekCount} />
               {data.pastCommitments.map((p, i) => (
                 <div key={i} className="past-promise">
                   <span className="eyebrow">EXPERIENCE 0{i + 1}</span>
@@ -1381,6 +1415,16 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                         area
                         key={key}
                         label={label}
+                        hint={
+                          {
+                            promise:
+                              "남이 시킨 일보다 스스로 결정하고 지킨 약속을 떠올려보세요.",
+                            action:
+                              "실제로 취한 행동과 실행을 도왔던 조건을 적으세요.",
+                            benefit:
+                              "그 약속을 지켜 얻은 변화나 이득을 적으세요.",
+                          }[key]
+                        }
                         value={p[key]}
                         onChange={(e) =>
                           change(
@@ -1402,6 +1446,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 title="삶의 영역별 헌신"
                 description="원하는 것뿐 아니라 필요한 행동과 비용까지 바라보고, 지금 감당할 약속을 선택하세요."
               />
+              <WritingGuide step="commitments" weekCount={weekCount} />
               <CommitmentWheel
                 weekCount={weekCount}
                 entries={data.commitments}
@@ -1497,6 +1542,7 @@ function SectionTitle({ number, title, description }) {
   );
 }
 function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
+  const modeHintId = useId();
   return (
     <div className="tactic-editor">
       <header>
@@ -1512,12 +1558,14 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
       <div className="two-col">
         <Field
           label="전술 이름"
+          hint="목표를 이루기 위해 내가 직접 실행할 행동을 적으세요."
           placeholder="예: 주 3회 5km 달리기"
           value={t.title}
           onChange={(e) => onChange({ ...t, title: e.target.value })}
         />
         <Field
           label="1회 완료 조건"
+          hint="한 번의 실행을 완료·미완료로 명확하게 판단할 기준입니다."
           placeholder="예: 5km를 끝까지 달렸을 때"
           value={t.condition}
           onChange={(e) => onChange({ ...t, condition: e.target.value })}
@@ -1527,6 +1575,8 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
         <label className="field">
           <span>실행 방식</span>
           <select
+            aria-label="실행 방식"
+            aria-describedby={modeHintId}
             value={t.kind}
             onChange={(e) => onChange({ ...t, kind: e.target.value })}
           >
@@ -1534,10 +1584,21 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
             <option value="daily">매일 1회</option>
             <option value="once">선택 주차마다 1회</option>
           </select>
+          <small id={modeHintId}>
+            {
+              {
+                weekly: "선택한 각 주에 아래 횟수만큼 실행합니다.",
+                daily:
+                  "선택한 주의 매일 1회 실행합니다. 빠진 날을 다른 날로 대체하지 않아요.",
+                once: "선택한 각 주에 1회 실행합니다. 한 번만 할 행동이라면 주차 하나를 선택하세요.",
+              }[t.kind]
+            }
+          </small>
         </label>
         {t.kind === "weekly" && (
           <Field
             label="주당 횟수"
+            hint="선택한 각 주에 약속할 실행 횟수입니다."
             type="number"
             min={1}
             max={50}
@@ -1548,6 +1609,9 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
       </div>
       <div className="field">
         <span>실행 주차</span>
+        <small>
+          이 전술을 수행할 주를 선택하세요. 전체 기간에 반복할 필요는 없어요.
+        </small>
         <div className="week-chips">
           {Array.from({ length: weekCount }, (_, i) => i + 1).map((w) => (
             <button
@@ -1833,6 +1897,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
           {mode === "day" && (
             <>
               <Guide ids={["moment"]} />
+              <WritingGuide step="daily" weekCount={weekCount} />
               <div className="day-strip">
                 {week.daily.map((d, i) => (
                   <button
@@ -1943,6 +2008,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
           {mode === "schedule" && (
             <>
               <Guide ids={["time", "process"]} />
+              <WritingGuide step="weekly" weekCount={weekCount} />
               <div className="section-heading">
                 <div>
                   <h2>모범 주간 위에 이번 주를 배치하세요.</h2>
@@ -2041,6 +2107,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
           {mode === "review" && (
             <>
               <Guide ids={["measure", "ownership"]} />
+              <WritingGuide step="review" weekCount={weekCount} />
               <section className="panel">
                 <header className="section-heading">
                   <div>
@@ -2355,6 +2422,7 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
   return (
     <>
       <Guide ids={["measure", "vision"]} />
+      <WritingGuide step="reflection" weekCount={weekCount} />
       <section className="panel">
         <h2>{weekCount}주 동안 쌓인 실행</h2>
         <div className="season-chart">

@@ -11,6 +11,11 @@ import "./planning.css";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const kinds = { strategy: "전략", buffer: "버퍼", breakout: "브레이크아웃" };
+const kindHints = {
+  strategy: "중요한 목표의 핵심 활동 하나에 집중하는 시간입니다.",
+  buffer: "연락·정리처럼 사소하지만 필요한 업무를 모아 처리하는 시간입니다.",
+  breakout: "성과를 내는 일에서 벗어나 재충전하고 기분을 전환하는 시간입니다.",
+};
 const hourHeight = 56;
 const uid = () => crypto.randomUUID();
 
@@ -614,6 +619,7 @@ export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
                     </option>
                   ))}
                 </select>
+                <small>{kindHints[edit.kind]}</small>
               </label>
               <label className="field">
                 <span>시작 시각</span>
@@ -703,6 +709,7 @@ export function ResponsibilityEditor({ value, legacy, onChange, onLegacy }) {
             <h4>개인 생활에서</h4>
             <ListInput
               label="개인 생활에서의 책임 실천"
+              placeholder="내가 선택할 수 있는 대응이나 바꿀 행동을 적어보세요."
               value={value.personal}
               onChange={(v) => onChange({ ...value, personal: v })}
             />
@@ -711,6 +718,7 @@ export function ResponsibilityEditor({ value, legacy, onChange, onLegacy }) {
             <h4>일·비즈니스에서</h4>
             <ListInput
               label="일에서의 책임 실천"
+              placeholder="내 책임 범위 안에서 실천할 구체적인 노력을 적어보세요."
               value={value.business}
               onChange={(v) => onChange({ ...value, business: v })}
             />
@@ -896,6 +904,15 @@ export function CommitmentWheel({
                   key={key}
                 >
                   <span>{label}</span>
+                  <small>
+                    {
+                      {
+                        promise: "이 영역에서 스스로 중요하게 여기는 약속",
+                        action: "목표 달성에 가장 크게 기여할 행동",
+                        cost: "그 행동에 필요한 시간·노력·포기할 것",
+                      }[key]
+                    }
+                  </small>
                   <textarea
                     aria-label={`${selected} ${label} ${i + 1}`}
                     rows={3}
