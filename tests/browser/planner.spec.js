@@ -66,7 +66,7 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
     .click();
   await page.getByLabel("할 활동", { exact: true }).fill("버퍼 블록");
   await page.getByLabel("블록 시작 시각").fill("10:00");
-  await page.getByLabel("블록 종류").selectOption("buffer");
+  await page.getByLabel("블록 종류", { exact: true }).selectOption("buffer");
   await page.getByLabel("블록 길이(분)").fill("60");
   await page.getByRole("button", { name: "블록 적용" }).click();
   await expect(page.locator(".calendar-event")).toHaveCount(2);
@@ -90,7 +90,7 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
   await page.getByLabel("할 활동", { exact: true }).fill("야간 회복");
   await page.getByLabel("블록 요일").selectOption("6");
   await page.getByLabel("블록 시작 시각").fill("03:00");
-  await page.getByLabel("블록 종류").selectOption("breakout");
+  await page.getByLabel("블록 종류", { exact: true }).selectOption("breakout");
   await page.getByRole("button", { name: "블록 적용" }).click();
   await expect(
     page.getByRole("button", {
@@ -133,13 +133,23 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
   await expect(
     page.getByRole("button", { name: "비즈니스 핵심 활동 1 비용 감수" }),
   ).toHaveAttribute("aria-pressed", "true");
+  const secondCommitment = page.getByRole("button", {
+    name: "비즈니스 핵심 활동 2 비용 감수",
+  });
+  await secondCommitment.click();
+  await expect(secondCommitment).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "비즈니스 핵심 활동 1 비용 감수" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await secondCommitment.click();
+  await expect(secondCommitment).toHaveAttribute("aria-pressed", "false");
   await page
     .locator(".commitment-practice")
     .screenshot({ path: "test-results/09-commitment-wheel.png" });
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("계획을 저장했어요.");
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+  await page.getByRole("tab", { name: /비전$/ }).click();
   await expect(
     page.getByRole("textbox", { name: "장기 비전 2", exact: true }),
   ).toHaveValue("건강한 관계");
@@ -163,6 +173,7 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
   await expect(
     page.getByRole("button", { name: "비즈니스 핵심 활동 1 비용 감수" }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expect(secondCommitment).toHaveAttribute("aria-pressed", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator(".commitment-practice")

@@ -96,7 +96,7 @@ test("Markdown conversations retain formatting after reload and stay within mobi
   ).toBeUndefined();
 
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+
   await page.getByRole("button", { name: "AI와 비전 다듬기" }).click();
   await expect(heading).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

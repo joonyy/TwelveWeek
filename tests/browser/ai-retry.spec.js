@@ -22,7 +22,7 @@ test("a failed reply survives reload and retries its saved question only once", 
     (await page.request.get("http://127.0.0.1:4111/api/health")).ok(),
   ).toBe(true);
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+
   await page.getByRole("button", { name: "AI와 비전 다듬기" }).click();
   await page.getByRole("button", { name: "저장된 질문 다시 보내기" }).click();
   await expect(page.getByRole("log")).toContainText(

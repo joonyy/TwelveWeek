@@ -113,9 +113,7 @@ test("list goals before tactics and preserve each goal's plan through switching,
   expect(after.start_date).toBe(before.start_date);
   expect(after.week_count).toBe(11);
   await page.reload();
-  await page
-    .getByRole("button", { name: /전체 방향을 먼저 정하는 11주/ })
-    .click();
+
   await page.getByRole("tab", { name: "11주 목표" }).click();
   await expect(page.getByLabel("11주 목표 1", { exact: true })).toHaveValue(
     "TwelveWeek 실제 사용 시험",

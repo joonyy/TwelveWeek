@@ -143,7 +143,7 @@ test("write goals beside three-year visions, select multiple connections and pre
   );
   await save();
   await page.reload();
-  await page.getByRole("button", { name: /비전과 이어지는 11주/ }).click();
+
   await page.getByRole("tab", { name: "11주 목표" }).click();
   await selectFirst.click();
   await expect(

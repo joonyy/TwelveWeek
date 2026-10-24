@@ -1,23 +1,47 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Plus, X, List, AlignLeft, Clock3, Check, Trash2 } from "lucide-react";
+import {
+  Plus,
+  X,
+  List,
+  AlignLeft,
+  Clock3,
+  Check,
+  Trash2,
+  Undo2,
+  Redo2,
+  Pencil,
+} from "lucide-react";
 import {
   COMMITMENT_AREAS,
   newCommitment,
   calendarFragments,
   calendarLanes,
   timeAtOffset,
+  resizeCalendarBlock,
 } from "../../shared/planning.js";
 import "./planning.css";
+import { hasScheduledTime, occurrenceLabel } from "../../shared/domain.js";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
-const kinds = { strategy: "전략", buffer: "버퍼", breakout: "브레이크아웃" };
+const kinds = {
+  strategy: "전략",
+  buffer: "버퍼",
+  breakout: "브레이크아웃",
+  fixed: "근무·고정 일정",
+};
 const kindHints = {
-  strategy: "중요한 목표의 핵심 활동 하나에 집중하는 시간입니다.",
+  execution:
+    "이번 주 전술의 한 회차를 배치합니다. 완료 여부와 주간 점수에 연결됩니다.",
+  strategy:
+    "핵심 활동에 집중할 시간을 예약합니다. 전술 완료나 점수에는 직접 반영되지 않습니다.",
   buffer: "연락·정리처럼 사소하지만 필요한 업무를 모아 처리하는 시간입니다.",
   breakout: "성과를 내는 일에서 벗어나 재충전하고 기분을 전환하는 시간입니다.",
+  fixed:
+    "근무나 약속처럼 이미 정해진 시간입니다. 남은 시간에 개인 작업을 배치하세요.",
 };
 const hourHeight = 56;
 const uid = () => crypto.randomUUID();
+export const EXECUTION_DRAG_TYPE = "text/twelve-execution";
 
 export function ListInput({
   label,
@@ -199,18 +223,27 @@ export function WeekCalendar({
   blocks,
   onCreate,
   onEdit,
+  onSelect,
+  selectedId,
   onMove,
+  onResize,
+  onPlace,
+  dragItem,
   dates,
   readonly = false,
   wrap = true,
   label = "모범 주간 캘린더",
+  referenceLabel = "모범 주간",
 }) {
   const scroll = useRef(null),
     [dragging, setDragging] = useState(null),
     selection = useRef(null),
     selectionFrame = useRef(null),
+    resize = useRef(null),
     suppressClick = useRef(false),
-    [preview, setPreview] = useState(null);
+    [preview, setPreview] = useState(null),
+    [resizePreview, setResizePreview] = useState(null),
+    [dropPreview, setDropPreview] = useState(null);
   useEffect(() => {
     if (scroll.current) scroll.current.scrollTop = 3 * hourHeight;
   }, []);
@@ -219,19 +252,96 @@ export function WeekCalendar({
       if (e.key === "Escape" && selection.current) {
         e.preventDefault();
         cancelSelection();
+      } else if (e.key === "Escape" && resize.current) {
+        e.preventDefault();
+        cancelResize();
       }
     }
+    function cancel() {
+      cancelSelection();
+      cancelResize();
+      setDropPreview(null);
+    }
     window.addEventListener("keydown", escape);
-    window.addEventListener("blur", cancelSelection);
+    window.addEventListener("blur", cancel);
     return () => {
       window.removeEventListener("keydown", escape);
-      window.removeEventListener("blur", cancelSelection);
+      window.removeEventListener("blur", cancel);
       cancelAnimationFrame(selectionFrame.current);
     };
   }, []);
   useEffect(() => {
     if (readonly || !onCreate) cancelSelection();
   }, [readonly, onCreate]);
+  useEffect(() => {
+    if (readonly || !onResize) cancelResize();
+  }, [readonly, onResize]);
+  useEffect(() => {
+    if (!dragItem && !dragging) setDropPreview(null);
+  }, [dragItem, dragging]);
+
+  function resizedBlock(r) {
+    const delta =
+      Math.round(
+        ((r.clientY -
+          r.anchorY +
+          r.columnTop -
+          r.column.getBoundingClientRect().top) /
+          hourHeight) *
+          2,
+      ) * 30;
+    return {
+      ...r.block,
+      ...resizeCalendarBlock(r.block, r.edge, delta, { wrap }),
+    };
+  }
+  function cancelResize() {
+    const r = resize.current;
+    resize.current = null;
+    cancelAnimationFrame(selectionFrame.current);
+    setResizePreview(null);
+    if (r) {
+      suppressClick.current = true;
+      if (r.column.hasPointerCapture(r.pointerId))
+        r.column.releasePointerCapture(r.pointerId);
+    }
+  }
+  function startResize(e, block, edge) {
+    if (readonly || !onResize || e.button !== 0 || !e.isPrimary) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect?.(block);
+    const column = e.currentTarget.closest(".calendar-column");
+    resize.current = {
+      block,
+      edge,
+      column,
+      columnTop: column.getBoundingClientRect().top,
+      pointerId: e.pointerId,
+      anchorY: e.clientY,
+      clientY: e.clientY,
+      moved: false,
+    };
+    column.setPointerCapture(e.pointerId);
+    setResizePreview(block);
+    selectionFrame.current = requestAnimationFrame(scrollSelection);
+  }
+  function moveResize(e) {
+    const r = resize.current;
+    if (!r || r.pointerId !== e.pointerId) return;
+    r.clientY = e.clientY;
+    if (Math.abs(r.clientY - r.anchorY) >= 4) r.moved = true;
+    setResizePreview(resizedBlock(r));
+  }
+  function finishResize(e) {
+    const r = resize.current;
+    if (!r || r.pointerId !== e.pointerId) return;
+    r.clientY = e.clientY;
+    const next = resizedBlock(r);
+    cancelResize();
+    if (next.time !== r.block.time || next.minutes !== r.block.minutes)
+      onResize(r.block, { time: next.time, minutes: next.minutes });
+  }
 
   function selectionRange(s) {
     const y = s.clientY - s.column.getBoundingClientRect().top;
@@ -260,7 +370,7 @@ export function WeekCalendar({
     }
   }
   function scrollSelection(now) {
-    const s = selection.current;
+    const s = selection.current || resize.current;
     if (!s) return;
     const elapsed = Math.min(32, now - (s.frameTime ?? now));
     s.frameTime = now;
@@ -276,8 +386,12 @@ export function WeekCalendar({
             ? Math.min(1, (s.clientY - bottom) / 36)
             : 0;
       if (speed) {
-        scroll.current.scrollTop += speed * elapsed * 0.7;
-        setPreview(selectionRange(s));
+        const amount = speed * elapsed * 0.7;
+        if (scroll.current.scrollHeight > scroll.current.clientHeight + 1)
+          scroll.current.scrollTop += amount;
+        else window.scrollBy(0, amount);
+        if (resize.current) setResizePreview(resizedBlock(s));
+        else setPreview(selectionRange(s));
       }
     }
     selectionFrame.current = requestAnimationFrame(scrollSelection);
@@ -324,24 +438,67 @@ export function WeekCalendar({
         minutes: range.end - range.start,
       });
   }
-  const fragments = calendarLanes(calendarFragments(blocks, { wrap }));
+  const visibleBlocks = blocks.map((b) =>
+    resizePreview?.id === b.id ? resizePreview : b,
+  );
+  const fragments = calendarLanes(calendarFragments(visibleBlocks, { wrap }));
+  function dropOffset(e) {
+    return Math.min(
+      1410,
+      Math.max(
+        0,
+        Math.round(
+          ((e.clientY - e.currentTarget.getBoundingClientRect().top) /
+            hourHeight) *
+            2,
+        ) * 30,
+      ),
+    );
+  }
+  function dragOver(e, day) {
+    if (readonly) return;
+    const external = e.dataTransfer.types.includes(EXECUTION_DRAG_TYPE);
+    if (
+      !(external
+        ? onPlace
+        : onMove && e.dataTransfer.types.includes("text/twelve-block"))
+    )
+      return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const block = external ? dragItem : blocks.find((b) => b.id === dragging);
+    const start = dropOffset(e);
+    setDropPreview({
+      day,
+      start,
+      end: Math.min(1440, start + (block?.minutes || 60)),
+      title: block?.title || "실행",
+    });
+    if (scroll.current) {
+      const viewport = scroll.current.getBoundingClientRect();
+      if (e.clientY > viewport.bottom - 30) scroll.current.scrollTop += 18;
+      else if (e.clientY < viewport.top + 90) scroll.current.scrollTop -= 18;
+    }
+  }
   function drop(e, day) {
     e.preventDefault();
+    setDropPreview(null);
+    const occurrenceId = e.dataTransfer.getData(EXECUTION_DRAG_TYPE);
+    if (occurrenceId && onPlace && !readonly) {
+      onPlace(occurrenceId, { day, time: timeAtOffset(dropOffset(e)) });
+      return;
+    }
     const id = e.dataTransfer.getData("text/twelve-block") || dragging;
     if (!id || readonly || !onMove) return;
     const block = blocks.find((b) => b.id === id);
     if (!block || block.background || block.locked) return;
-    const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
-    const offset = Math.min(
-      1410,
-      Math.max(0, Math.round(((y / hourHeight) * 60) / 30) * 30),
-    );
+    const offset = dropOffset(e);
     onMove(block, { day, time: timeAtOffset(offset) });
     setDragging(null);
   }
   return (
     <div
-      className={`week-calendar ${preview ? "selecting" : ""}`}
+      className={`week-calendar ${preview ? "selecting" : ""} ${resizePreview ? "resizing" : ""}`}
       role="region"
       aria-label={label}
       onPointerDownCapture={() => {
@@ -388,14 +545,27 @@ export function WeekCalendar({
                 className={`calendar-column ${day > 4 ? "weekend" : ""}`}
                 data-day={day}
                 onPointerDown={(e) => startSelection(e, day)}
-                onPointerMove={moveSelection}
-                onPointerUp={finishSelection}
-                onPointerCancel={cancelSelection}
+                onPointerMove={(e) =>
+                  resize.current ? moveResize(e) : moveSelection(e)
+                }
+                onPointerUp={(e) =>
+                  resize.current ? finishResize(e) : finishSelection(e)
+                }
+                onPointerCancel={() => {
+                  cancelSelection();
+                  cancelResize();
+                }}
                 onLostPointerCapture={() => {
                   if (selection.current) cancelSelection();
+                  if (resize.current) cancelResize();
                 }}
-                onDragOver={(e) => {
-                  if (onMove && !readonly) e.preventDefault();
+                onDragOver={(e) => dragOver(e, day)}
+                onDragLeave={(e) => {
+                  if (
+                    !(e.relatedTarget instanceof Node) ||
+                    !e.currentTarget.contains(e.relatedTarget)
+                  )
+                    setDropPreview(null);
                 }}
                 onDrop={(e) => drop(e, day)}
               >
@@ -451,6 +621,24 @@ export function WeekCalendar({
                     )}
                   </div>
                 )}
+                {dropPreview?.day === day && (
+                  <div
+                    className="calendar-selection calendar-drop-preview"
+                    role="status"
+                    style={{
+                      top: (dropPreview.start / 60) * hourHeight,
+                      height:
+                        ((dropPreview.end - dropPreview.start) / 60) *
+                        hourHeight,
+                    }}
+                  >
+                    <strong>{dropPreview.title}</strong>
+                    <small>
+                      {dropPreview.start >= 1200 ? "다음 날 " : ""}
+                      {timeAtOffset(dropPreview.start)} · 놓아서 배치
+                    </small>
+                  </div>
+                )}
                 {fragments
                   .filter((b) => b.day === day)
                   .map((b) => {
@@ -463,42 +651,122 @@ export function WeekCalendar({
                       left: `calc(${(b.lane / b.lanes) * 100}% + 3px)`,
                       width: `calc(${100 / b.lanes}% - 6px)`,
                     };
-                    const labelText = `${b.title || kinds[b.kind] || "실행"} · ${days[blocks.find((x) => x.id === b.id)?.day ?? b.day]}요일 ${b.time} · ${b.minutes}분`;
+                    const originalDay =
+                      blocks.find((x) => x.id === b.id)?.day ?? b.day;
+                    const labelText = `${b.title || kinds[b.kind] || "실행"} · ${originalDay < 0 ? "전주 " : ""}${days[(originalDay + 7) % 7]}요일 ${b.time} · ${b.minutes}분`;
                     return (
-                      <button
+                      <div
                         key={`${b.id}-${b.part}`}
-                        type="button"
-                        className={`calendar-event ${b.kind || "actual"} ${b.background ? "reference" : ""} ${b.completed ? "done" : ""} ${b.part ? "continuation" : ""}`}
+                        className={`calendar-event-shell ${b.background ? "reference" : ""}`}
+                        data-block-id={b.id}
+                        data-part={b.part}
                         style={style}
-                        aria-label={labelText}
-                        title={`${labelText}${b.part ? " · 전날에서 이어짐" : ""}`}
-                        disabled={readonly || b.locked || b.background}
-                        draggable={
-                          !readonly &&
+                      >
+                        <button
+                          type="button"
+                          className={`calendar-event ${b.kind || "actual"} ${b.background ? "reference" : ""} ${b.completed ? "done" : ""} ${b.part ? "continuation" : ""}`}
+                          aria-label={labelText}
+                          aria-pressed={
+                            onSelect ? selectedId === b.id : undefined
+                          }
+                          title={`${labelText}${b.part ? " · 전날에서 이어짐" : ""}`}
+                          disabled={readonly || b.locked || b.background}
+                          draggable={
+                            !readonly &&
+                            !b.locked &&
+                            !b.background &&
+                            !!onMove &&
+                            b.part === 0
+                          }
+                          onDragStart={(e) => {
+                            if (resize.current) {
+                              e.preventDefault();
+                              return;
+                            }
+                            e.dataTransfer.setData("text/twelve-block", b.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            onSelect?.(blocks.find((x) => x.id === b.id));
+                            setDragging(b.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragging(null);
+                            setDropPreview(null);
+                          }}
+                          onFocus={() =>
+                            onSelect?.(blocks.find((x) => x.id === b.id))
+                          }
+                          onClick={(e) => {
+                            const block = blocks.find((x) => x.id === b.id);
+                            onSelect?.(block);
+                            if (!onSelect || e.detail === 0) onEdit?.(block);
+                          }}
+                          onDoubleClick={() => {
+                            if (onSelect)
+                              onEdit?.(blocks.find((x) => x.id === b.id));
+                          }}
+                        >
+                          <strong>{b.title || kinds[b.kind] || "실행"}</strong>
+                          <small>
+                            {b.part
+                              ? "전날에서 이어짐"
+                              : `${b.time} · ${b.minutes}분`}
+                            {b.background ? ` · ${referenceLabel}` : ""}
+                          </small>
+                          {b.completed && <Check size={13} />}
+                        </button>
+                        {!readonly &&
                           !b.locked &&
                           !b.background &&
-                          !!onMove &&
-                          b.part === 0
-                        }
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/twelve-block", b.id);
-                          e.dataTransfer.effectAllowed = "move";
-                          setDragging(b.id);
-                        }}
-                        onDragEnd={() => setDragging(null)}
-                        onClick={() =>
-                          onEdit?.(blocks.find((x) => x.id === b.id))
-                        }
-                      >
-                        <strong>{b.title || kinds[b.kind] || "실행"}</strong>
-                        <small>
-                          {b.part
-                            ? "전날에서 이어짐"
-                            : `${b.time} · ${b.minutes}분`}
-                          {b.background ? " · 모범 주간" : ""}
-                        </small>
-                        {b.completed && <Check size={13} />}
-                      </button>
+                          onResize &&
+                          ["start", "end"].map((edge) => {
+                            const original = blocks.find((x) => x.id === b.id);
+                            const hasContinuation = fragments.some(
+                              (x) => x.id === b.id && x.part === 1,
+                            );
+                            if (
+                              (edge === "start" && b.part !== 0) ||
+                              (edge === "end" &&
+                                b.part === 0 &&
+                                hasContinuation)
+                            )
+                              return null;
+                            return (
+                              <button
+                                key={edge}
+                                type="button"
+                                className={`calendar-resize-handle ${edge}`}
+                                aria-label={`${b.title || "실행"} ${edge === "start" ? "시작" : "종료"} 시간 조절`}
+                                title="드래그로 30분씩 조절 · 방향키로 조절 · Esc 취소"
+                                onPointerDown={(e) =>
+                                  startResize(e, original, edge)
+                                }
+                                onFocus={() => onSelect?.(original)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "ArrowUp" ||
+                                    e.key === "ArrowDown"
+                                  ) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onResize(
+                                      original,
+                                      resizeCalendarBlock(
+                                        original,
+                                        edge,
+                                        e.key === "ArrowUp" ? -30 : 30,
+                                        { wrap },
+                                      ),
+                                    );
+                                  }
+                                }}
+                              />
+                            );
+                          })}
+                      </div>
                     );
                   })}
               </div>
@@ -511,7 +779,16 @@ export function WeekCalendar({
           <Clock3 size={13} />
           아래로 스크롤하면 다음 날 새벽까지 볼 수 있어요.
         </span>
-        {onMove && !readonly && <span>블록을 끌어 옮기거나 눌러 수정</span>}
+        {onMove && !readonly && (
+          <span>
+            {onSelect
+              ? "클릭해 선택 · 더블클릭 또는 Enter로 편집"
+              : "블록을 끌어 옮기거나 눌러 수정"}
+          </span>
+        )}
+        {onResize && !readonly && (
+          <span>위·아래 손잡이로 시간 조절 · Esc 취소</span>
+        )}
         {onCreate && !readonly && (
           <span>빈칸을 드래그해 시간 선택 · Esc 취소</span>
         )}
@@ -520,9 +797,228 @@ export function WeekCalendar({
   );
 }
 
-export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
+export function ModelWeekEditor({
+  blocks,
+  onChange,
+  Modal,
+  readonly = false,
+  wrap = true,
+  initialCreationKind,
+  tactics = [],
+  occurrences = [],
+  dates = [],
+  executionBlocks = [],
+  onPlaceExecution,
+  onAddExecution,
+  onEditExecution,
+}) {
   const [edit, setEdit] = useState(null),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [selectedId, setSelectedId] = useState(null),
+    [copiedBlock, setCopiedBlock] = useState(null),
+    [pasteTarget, setPasteTarget] = useState(null),
+    [creationKind, setCreationKind] = useState(
+      () =>
+        initialCreationKind ||
+        (onPlaceExecution && occurrences.some((o) => !o.completed)
+          ? "execution"
+          : "strategy"),
+    ),
+    [, setHistoryVersion] = useState(0);
+  const editor = useRef(null);
+  const history = useRef({ undo: [], redo: [], expected: blocks });
+  useEffect(() => {
+    // A parent reset/replacement starts a new history; never restore another week's draft.
+    if (history.current.expected !== blocks) {
+      history.current = { undo: [], redo: [], expected: blocks };
+      setSelectedId(null);
+      setHistoryVersion((v) => v + 1);
+    }
+  }, [blocks]);
+  const selectedBlock = blocks.find((b) => b.id === selectedId);
+  const selectedExecution = executionBlocks.find(
+    (b) => `execution-${b.id}` === selectedId,
+  );
+  function commitBlocks(next, selected = selectedId) {
+    if (readonly || JSON.stringify(next) === JSON.stringify(blocks)) return;
+    const h = history.current;
+    h.undo.push({ blocks: structuredClone(blocks), selectedId });
+    h.undo = h.undo.slice(-50);
+    h.redo = [];
+    h.expected = next;
+    setSelectedId(selected);
+    setHistoryVersion((v) => v + 1);
+    onChange(next);
+  }
+  function restore(direction) {
+    if (readonly || edit) return;
+    const h = history.current,
+      target = h[direction].pop();
+    if (!target) return;
+    h[direction === "undo" ? "redo" : "undo"].push({
+      blocks: structuredClone(blocks),
+      selectedId,
+    });
+    h.expected = target.blocks;
+    setSelectedId(target.selectedId);
+    setMessage("");
+    setHistoryVersion((v) => v + 1);
+    onChange(target.blocks);
+    editor.current?.focus({ preventScroll: true });
+  }
+  function removeBlock(id) {
+    if (readonly || !blocks.some((b) => b.id === id)) return;
+    commitBlocks(
+      blocks.filter((b) => b.id !== id),
+      null,
+    );
+    setMessage("블록을 삭제했어요. ⌘Z 또는 Ctrl+Z로 되돌릴 수 있어요.");
+    editor.current?.focus({ preventScroll: true });
+  }
+  function editSelected() {
+    setMessage("");
+    if (selectedBlock) setEdit(selectedBlock);
+    else if (selectedExecution) onEditExecution?.(selectedExecution.id);
+  }
+  function copySelected() {
+    const source = selectedBlock || selectedExecution;
+    if (!source) return false;
+    setCopiedBlock({
+      kind: selectedExecution ? "execution" : source.kind,
+      title: source.title,
+      tacticId: selectedExecution?.tacticId,
+      day: source.day,
+      time: source.time,
+      minutes: source.minutes,
+    });
+    setPasteTarget(null);
+    setMessage(`${source.title} 복사됨 · 붙여넣을 빈 시간을 선택하세요.`);
+    return true;
+  }
+  async function pasteCopied() {
+    if (readonly || !copiedBlock) return;
+    if (!pasteTarget) {
+      setMessage("먼저 붙여넣을 빈 시간을 선택하세요.");
+      return;
+    }
+    if (copiedBlock.kind === "execution") {
+      const tactic = tactics.find((t) => t.id === copiedBlock.tacticId);
+      if (!tactic || !onAddExecution) {
+        setMessage("복사한 전술을 이번 주에서 찾을 수 없어요.");
+        return;
+      }
+      if (tactic.kind === "daily") {
+        setMessage(
+          "매일 전술은 하루 한 회차로 고정되어 복제할 수 없어요. 해당 날짜의 기존 회차를 배치하세요.",
+        );
+        return;
+      }
+      const saved = await onAddExecution(tactic, {
+        ...pasteTarget,
+        minutes: copiedBlock.minutes,
+      });
+      if (!saved) {
+        setMessage("전술 실행 복사가 취소되었거나 저장되지 않았어요.");
+        return;
+      }
+    } else {
+      const id = uid();
+      commitBlocks(
+        [
+          ...blocks,
+          {
+            id,
+            day: pasteTarget.day,
+            time: pasteTarget.time,
+            minutes: copiedBlock.minutes,
+            kind: copiedBlock.kind,
+            title: copiedBlock.title,
+          },
+        ],
+        id,
+      );
+    }
+    setPasteTarget(null);
+    setMessage(
+      `${copiedBlock.title} 붙여넣기 완료 · 다른 빈 시간을 선택하면 다시 붙여넣을 수 있어요.`,
+    );
+  }
+  function chooseEmptyTime(change) {
+    if (!copiedBlock) return create(change);
+    setPasteTarget({ day: change.day, time: change.time });
+    setMessage(
+      `${days[change.day]}요일 ${change.time} 선택됨 · ⌘V / Ctrl+V 또는 붙여넣기 버튼을 누르세요.`,
+    );
+    editor.current?.focus({ preventScroll: true });
+  }
+  function shortcuts(e) {
+    if (
+      readonly ||
+      edit ||
+      e.defaultPrevented ||
+      e.isComposing ||
+      e.target.closest(
+        "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox']",
+      )
+    )
+      return;
+    const command = e.metaKey || e.ctrlKey;
+    if (command && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "c") {
+      if (copySelected()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    } else if (
+      command &&
+      !e.altKey &&
+      !e.shiftKey &&
+      e.key.toLowerCase() === "v" &&
+      copiedBlock
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) pasteCopied();
+    } else if (command && !e.altKey && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) restore(e.shiftKey ? "redo" : "undo");
+    } else if (
+      command &&
+      !e.altKey &&
+      !e.shiftKey &&
+      e.key.toLowerCase() === "y"
+    ) {
+      e.preventDefault();
+      if (!e.repeat) restore("redo");
+    } else if (
+      !command &&
+      !e.altKey &&
+      !e.shiftKey &&
+      (e.key === "Backspace" || e.key === "Delete") &&
+      (selectedBlock || selectedExecution)
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat) return;
+      if (selectedBlock) removeBlock(selectedBlock.id);
+      else
+        setMessage(
+          "전술 실행은 주간 약속을 유지하기 위해 삭제할 수 없어요. 더블클릭해 같은 주 안에서 일정을 변경하세요.",
+        );
+    } else if (
+      e.key === "Enter" &&
+      e.target === editor.current &&
+      (selectedBlock || selectedExecution)
+    ) {
+      e.preventDefault();
+      editSelected();
+    } else if (e.key === "Escape") {
+      setSelectedId(null);
+      setCopiedBlock(null);
+      setPasteTarget(null);
+      setMessage("");
+    }
+  }
   function create({ day = 0, time = "09:00", minutes = 180 } = {}) {
     setMessage("");
     setEdit({
@@ -530,74 +1026,419 @@ export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
       day,
       time,
       minutes,
-      kind: "strategy",
+      kind: creationKind,
       title: "",
     });
   }
-  function save(e) {
+  async function save(e) {
     e.preventDefault();
+    if (readonly) return;
     if (!edit.time || edit.minutes < 5 || edit.minutes > 720) {
       setMessage("시작 시각과 5~720분 사이의 길이를 확인해주세요.");
       return;
     }
-    onChange(
+    if (edit.kind === "execution") {
+      if (edit.occurrenceId === "extra" && onAddExecution) {
+        const tactic = tactics.find((t) => t.id === edit.tacticId);
+        if (tactic && (await onAddExecution(tactic, edit))) setEdit(null);
+        return;
+      }
+      const occurrence = occurrences.find(
+        (o) => o.id === edit.occurrenceId && !o.completed,
+      );
+      if (!occurrence) {
+        setMessage("배치할 전술과 실행 회차를 선택해주세요.");
+        return;
+      }
+      if (
+        occurrence.requiredDate &&
+        occurrence.requiredDate !== dates[edit.day]
+      ) {
+        setMessage("매일 전술은 해당 평가일에만 배치할 수 있어요.");
+        return;
+      }
+      const saved = await onPlaceExecution(occurrence.id, {
+        day: edit.day,
+        time: edit.time,
+        minutes: edit.minutes,
+      });
+      if (saved) setEdit(null);
+      else
+        setMessage(
+          "실행을 배치하지 못했어요. 입력 내용과 연결 상태를 확인해주세요.",
+        );
+      return;
+    }
+    const { tacticId, occurrenceId, ...block } = edit;
+    commitBlocks(
       blocks.some((b) => b.id === edit.id)
-        ? blocks.map((b) => (b.id === edit.id ? edit : b))
-        : [...blocks, edit],
+        ? blocks.map((b) => (b.id === edit.id ? block : b))
+        : [...blocks, block],
+      edit.id,
     );
     setEdit(null);
   }
+  const eligible = occurrences.filter(
+    (o) => o.tacticId === edit?.tacticId && !o.completed,
+  );
+  const selectedTactic = tactics.find((t) => t.id === edit?.tacticId);
+  function selectTactic(tacticId) {
+    const choices = occurrences.filter(
+      (o) => o.tacticId === tacticId && !o.completed,
+    );
+    const first =
+      choices.find((o) => !hasScheduledTime(o)) ??
+      choices.find((o) => o.requiredDate === dates[edit.day]) ??
+      choices[0];
+    setMessage("");
+    setEdit({
+      ...edit,
+      tacticId,
+      occurrenceId: first?.id ?? "",
+      day: first?.requiredDate ? dates.indexOf(first.requiredDate) : edit.day,
+    });
+  }
+  function setDay(day) {
+    setMessage("");
+    const required =
+      selectedTactic?.kind === "daily"
+        ? eligible.find((o) => o.requiredDate === dates[day])
+        : undefined;
+    setEdit({
+      ...edit,
+      day,
+      ...(selectedTactic?.kind === "daily"
+        ? { occurrenceId: required?.id ?? "" }
+        : {}),
+    });
+  }
+  function changeBlock(block, change) {
+    if (block.executionId)
+      return onPlaceExecution?.(block.executionId, {
+        day: block.day,
+        time: block.time,
+        minutes: block.minutes,
+        ...change,
+      });
+    commitBlocks(
+      blocks.map((b) => (b.id === block.id ? { ...b, ...change } : b)),
+      block.id,
+    );
+  }
   return (
     <>
-      <div className="calendar-toolbar">
-        <div className="calendar-legend">
-          <span className="strategy">전략 · 중요한 일에 집중</span>
-          <span className="buffer">버퍼 · 작은 일 모아 처리</span>
-          <span className="breakout">브레이크아웃 · 재충전</span>
+      <div
+        ref={editor}
+        className="model-calendar-editor"
+        tabIndex={-1}
+        onKeyDown={shortcuts}
+      >
+        <div className="calendar-toolbar">
+          <div
+            className="calendar-kind-picker"
+            role="group"
+            aria-label="새 시간 블록 종류"
+          >
+            <span>새 블록 종류</span>
+            {Object.entries({
+              fixed: kinds.fixed,
+              strategy: kinds.strategy,
+              buffer: kinds.buffer,
+              breakout: kinds.breakout,
+              ...(onPlaceExecution ? { execution: "전술 실행" } : {}),
+            }).map(([kind, title]) => (
+              <button
+                key={kind}
+                type="button"
+                className={`calendar-kind-button ${kind}`}
+                aria-label={`새 블록 종류: ${title}`}
+                aria-pressed={creationKind === kind}
+                title={kindHints[kind]}
+                disabled={readonly}
+                onClick={() => setCreationKind(kind)}
+              >
+                <span aria-hidden="true" />
+                {title}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="button light"
+            onClick={() => create()}
+            disabled={readonly}
+          >
+            <Plus size={16} />
+            시간 블록 추가
+          </button>
         </div>
-        <button
-          type="button"
-          className="button light"
-          onClick={() => create()}
-          disabled={readonly}
+        <p className="muted">
+          만들 블록의 종류를 고른 뒤 빈 시간대를 클릭하거나 드래그하세요.
+          드래그한 시간이 30분 단위로 표시되고, 놓으면 선택한 종류로 입력창이
+          열립니다. 근무 변경은 기존 블록을 더블클릭해 수정하세요.
+          {onPlaceExecution && (
+            <>
+              {" "}
+              전략은 시간 확보용이고, 전술 실행은 완료·주간 점수에 연결됩니다.
+            </>
+          )}
+        </p>
+        <div
+          className="calendar-selection-toolbar"
+          role="group"
+          aria-label="선택한 시간 블록"
         >
-          <Plus size={16} />
-          시간 블록 추가
-        </button>
+          <span>
+            {selectedBlock?.title ||
+              selectedExecution?.title ||
+              "블록을 클릭해 선택하세요"}
+          </span>
+          <button
+            type="button"
+            className="text-button"
+            onClick={editSelected}
+            disabled={readonly || (!selectedBlock && !selectedExecution)}
+          >
+            <Pencil size={14} />
+            상세 편집
+          </button>
+          <button
+            type="button"
+            className="text-button danger"
+            onClick={() => removeBlock(selectedId)}
+            disabled={readonly || !selectedBlock}
+          >
+            <Trash2 size={14} />
+            삭제
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            aria-label="시간표 실행 취소"
+            title="⌘Z / Ctrl+Z"
+            onClick={() => restore("undo")}
+            disabled={readonly || !history.current.undo.length}
+          >
+            <Undo2 size={14} />
+            실행 취소
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            aria-label="시간표 다시 실행"
+            title="⇧⌘Z / Ctrl+Shift+Z"
+            onClick={() => restore("redo")}
+            disabled={readonly || !history.current.redo.length}
+          >
+            <Redo2 size={14} />
+            다시 실행
+          </button>
+        </div>
+        <p className="calendar-shortcuts">
+          클릭해 선택 · ⌫ / Delete로 삭제 · ⌘Z / Ctrl+Z로 실행 취소 · 더블클릭
+          또는 Enter로 상세 편집 · ⌘C / Ctrl+C로 복사
+        </p>
+        {copiedBlock && (
+          <div
+            className="calendar-paste-toolbar"
+            role="group"
+            aria-label="복사한 시간 블록"
+          >
+            <span>
+              {copiedBlock.title} ·{" "}
+              {pasteTarget
+                ? `${days[pasteTarget.day]}요일 ${pasteTarget.time}에 붙여넣기`
+                : "붙여넣을 빈 시간을 선택하세요"}
+            </span>
+            <button
+              type="button"
+              className="button light"
+              disabled={readonly || !pasteTarget}
+              onClick={pasteCopied}
+            >
+              붙여넣기
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setCopiedBlock(null);
+                setPasteTarget(null);
+                setMessage("");
+              }}
+            >
+              복사 해제
+            </button>
+          </div>
+        )}
+        {message && !edit && (
+          <p className="calendar-edit-message" role="status">
+            {message}
+          </p>
+        )}
+        <WeekCalendar
+          blocks={[
+            ...blocks,
+            ...executionBlocks.map((b) => ({
+              ...b,
+              id: `execution-${b.id}`,
+              executionId: b.id,
+            })),
+          ]}
+          wrap={wrap}
+          dates={dates.length === 7 ? dates : undefined}
+          onCreate={chooseEmptyTime}
+          onSelect={(b) => {
+            setSelectedId(b.id);
+            setMessage("");
+          }}
+          selectedId={selectedId}
+          onEdit={(b) =>
+            b.executionId ? onEditExecution?.(b.executionId) : setEdit(b)
+          }
+          onMove={changeBlock}
+          onResize={changeBlock}
+          readonly={readonly}
+        />
       </div>
-      <p className="muted">
-        빈 시간대를 누른 채 위아래로 드래그해보세요. 선택한 시간이 30분 단위로
-        표시되고, 놓으면 활동을 입력할 수 있어요. 한 번 클릭하거나 추가 버튼을
-        누르면 기본 3시간 블록으로 시작합니다.
-      </p>
-      <WeekCalendar
-        blocks={blocks}
-        onCreate={create}
-        onEdit={setEdit}
-        onMove={(b, change) =>
-          onChange(blocks.map((x) => (x.id === b.id ? { ...x, ...change } : x)))
-        }
-        readonly={readonly}
-      />
       {edit && (
         <Modal title="모범 주간 시간 블록" onClose={() => setEdit(null)}>
           <form onSubmit={save}>
-            <label className="field">
-              <span>할 활동</span>
-              <input
-                aria-label="할 활동"
-                value={edit.title}
-                placeholder="이 시간에 하고 싶은 활동"
-                onChange={(e) => setEdit({ ...edit, title: e.target.value })}
-              />
+            <label className="field calendar-block-kind">
+              <span>블록 종류</span>
+              <select
+                aria-label="블록 종류"
+                value={edit.kind}
+                disabled={readonly}
+                onChange={(e) => {
+                  setEdit({ ...edit, kind: e.target.value });
+                  setMessage("");
+                }}
+              >
+                {onPlaceExecution && !blocks.some((b) => b.id === edit.id) && (
+                  <option value="execution">전술 실행</option>
+                )}
+                {Object.entries(kinds).map(([kind, title]) => (
+                  <option key={kind} value={kind}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+              <small>{kindHints[edit.kind]}</small>
             </label>
+            {edit.kind === "execution" && (
+              <div className="execution-block-choice">
+                <label className="field">
+                  <span>전술 선택</span>
+                  <select
+                    aria-label="배치할 전술"
+                    value={edit.tacticId || ""}
+                    required
+                    disabled={readonly}
+                    onChange={(e) => selectTactic(e.target.value)}
+                  >
+                    <option value="">이번 주 전술을 선택하세요</option>
+                    {tactics.map((t) => (
+                      <option
+                        key={t.id}
+                        value={t.id}
+                        disabled={
+                          !(
+                            onAddExecution &&
+                            t.kind !== "daily" &&
+                            occurrences.filter((o) => o.tacticId === t.id)
+                              .length < 50
+                          ) &&
+                          !occurrences.some(
+                            (o) => o.tacticId === t.id && !o.completed,
+                          )
+                        }
+                      >
+                        {t.goalTitle} / {t.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedTactic && (
+                  <>
+                    <p className="muted">
+                      완료 기준: {selectedTactic.condition}
+                    </p>
+                    <label className="field">
+                      <span>실행 회차</span>
+                      <select
+                        aria-label="배치할 실행 회차"
+                        value={edit.occurrenceId || ""}
+                        required
+                        disabled={readonly}
+                        onChange={(e) => {
+                          if (e.target.value === "extra") {
+                            setEdit({ ...edit, occurrenceId: "extra" });
+                            return;
+                          }
+                          const o = eligible.find(
+                            (x) => x.id === e.target.value,
+                          );
+                          setEdit({
+                            ...edit,
+                            occurrenceId: o?.id ?? "",
+                            day: o?.requiredDate
+                              ? dates.indexOf(o.requiredDate)
+                              : edit.day,
+                          });
+                        }}
+                      >
+                        <option value="">배치할 회차를 선택하세요</option>
+                        {eligible.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {occurrenceLabel(o, occurrences)} ·{" "}
+                            {hasScheduledTime(o)
+                              ? `${o.date} ${o.time}에서 이동`
+                              : "시간 미배치"}
+                          </option>
+                        ))}
+                        {onAddExecution &&
+                          selectedTactic.kind !== "daily" &&
+                          occurrences.filter(
+                            (o) => o.tacticId === selectedTactic.id,
+                          ).length < 50 && (
+                            <option value="extra">이번 주 1회 더 추가</option>
+                          )}
+                      </select>
+                    </label>
+                    {edit.occurrenceId === "extra" && (
+                      <p className="footnote">
+                        추가 실행을 배치합니다. 최소 약속{" "}
+                        {selectedTactic.plannedCount}회와 평가 기준은 그대로
+                        유지됩니다.
+                      </p>
+                    )}
+                  </>
+                )}
+                <p className="footnote">
+                  전술은 블록 적용 시 실제 실행 일정에 바로 저장됩니다. 이미
+                  배치한 회차를 고르면 그 일정을 옮깁니다.
+                </p>
+              </div>
+            )}
+            {edit.kind !== "execution" && (
+              <label className="field">
+                <span>할 활동</span>
+                <input
+                  aria-label="할 활동"
+                  value={edit.title}
+                  placeholder="이 시간에 하고 싶은 활동"
+                  onChange={(e) => setEdit({ ...edit, title: e.target.value })}
+                />
+              </label>
+            )}
             <div className="two-col">
               <label className="field">
                 <span>요일</span>
                 <select
                   aria-label="블록 요일"
                   value={edit.day}
-                  onChange={(e) => setEdit({ ...edit, day: +e.target.value })}
+                  onChange={(e) => setDay(+e.target.value)}
                 >
                   {days.map((d, i) => (
                     <option key={d} value={i}>
@@ -605,21 +1446,6 @@ export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>블록 종류</span>
-                <select
-                  aria-label="블록 종류"
-                  value={edit.kind}
-                  onChange={(e) => setEdit({ ...edit, kind: e.target.value })}
-                >
-                  {Object.entries(kinds).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-                <small>{kindHints[edit.kind]}</small>
               </label>
               <label className="field">
                 <span>시작 시각</span>
@@ -657,7 +1483,7 @@ export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
                   type="button"
                   className="text-button danger"
                   onClick={() => {
-                    onChange(blocks.filter((b) => b.id !== edit.id));
+                    removeBlock(edit.id);
                     setEdit(null);
                   }}
                 >
@@ -665,7 +1491,7 @@ export function ModelWeekEditor({ blocks, onChange, Modal, readonly = false }) {
                   블록 삭제
                 </button>
               )}
-              <button className="button" type="submit">
+              <button className="button" type="submit" disabled={readonly}>
                 블록 적용
                 <Check size={16} />
               </button>
@@ -880,9 +1706,11 @@ export function CommitmentWheel({
             <span className="eyebrow">{selected}</span>
             <h3>{selected}에서의 헌신</h3>
           </div>
-          <span className="circle-legend">
-            <span>○</span>비용을 감수할 핵심 활동
-          </span>
+          <p className="commitment-selection-hint">
+            {readonly
+              ? "비용을 감수하기로 선택한 활동은 동그라미로 표시됩니다."
+              : "활동 아래 버튼으로 선택·해제하세요. 여러 활동을 선택할 수 있어요."}
+          </p>
         </header>
         <div className="commitment-table">
           <div className="commitment-columns" aria-hidden="true">
@@ -936,8 +1764,12 @@ export function CommitmentWheel({
                       onClick={() => update(c.id, "accepted", !c.accepted)}
                       disabled={readonly}
                     >
-                      <span>{c.accepted ? "◯" : "○"}</span>
-                      {c.accepted ? "감수하기로 선택" : "비용 감수 선택"}
+                      <span aria-hidden="true">
+                        {c.accepted ? <Check size={16} /> : "○"}
+                      </span>
+                      {c.accepted
+                        ? "감수하기로 선택 · 해제"
+                        : "이 활동의 비용 감수하기"}
                     </button>
                   )}
                 </label>

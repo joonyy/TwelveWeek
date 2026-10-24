@@ -1,0 +1,161 @@
+.execution-picker .muted {
+  line-height: 1.8;
+}
+.execution-focus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  background: #edf3e5;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 18px 0;
+  color: #526e43;
+}
+.execution-focus > span {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.execution-focus svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.execution-focus button {
+  font-size: 11px;
+}
+.execution-goal-list {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+.execution-goal-list > button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #f8faf5;
+  border: 1px solid #e0e7d8;
+  border-radius: 8px;
+  color: #526e43;
+  text-align: left;
+  min-width: 0;
+}
+.execution-goal-list > button.selected {
+  background: #edf3e5;
+  border-color: #89a96f;
+  box-shadow: inset 3px 0 #89a96f;
+}
+.execution-goal-list svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.execution-goal-list strong {
+  font-size: 13px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.execution-goal-list small {
+  display: block;
+  font-size: 10px;
+  margin-top: 6px;
+  color: #839276;
+}
+.execution-goal-content {
+  border-top: 1px solid #e0e7d8;
+  padding-top: 18px;
+}
+.execution-goal-content > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.execution-goal-content h3 {
+  margin: 0;
+  color: #36563d;
+  font-size: 16px;
+}
+.execution-goal-content > header .text-button {
+  font-size: 12px;
+}
+.execution-tactic-choice {
+  border: 1px solid #e0e7d8;
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 16px;
+}
+.execution-tactic-choice h4,
+.execution-other-weeks h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #36563d;
+}
+.execution-condition,
+.execution-status,
+.execution-other-weeks p {
+  color: #7b8b6f;
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 6px 0;
+}
+.execution-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+}
+.execution-choice-actions .field {
+  flex: 1 1 200px;
+  margin: 0;
+  min-width: 0;
+}
+.execution-choice-actions button {
+  min-height: 42px;
+  font-size: 12px;
+}
+.execution-other-weeks {
+  margin: 16px 0;
+  font-size: 12px;
+  color: #7b8b6f;
+}
+.execution-extra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.execution-other-weeks summary {
+  cursor: pointer;
+}
+.execution-other-weeks article {
+  border-top: 1px solid #e0e7d8;
+  padding: 12px 0;
+  margin-top: 12px;
+}
+.execution-tactic-form {
+  background: #f4f7ef;
+  border: 1px solid #dce5d3;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 18px;
+}
+.execution-tactic-form .week-picks {
+  margin-bottom: 18px;
+}
+.execution-tactic-form .form-actions {
+  flex-wrap: wrap;
+}
+
+.quick-tactic-inputs {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

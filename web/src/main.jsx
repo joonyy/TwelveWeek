@@ -1,4 +1,11 @@
-import React, { useEffect, useState, useRef, useId } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useId,
+  lazy,
+  Suspense,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowUpRight,
@@ -23,6 +30,11 @@ import {
 } from "lucide-react";
 import { api, token } from "./api.js";
 import {
+  readNavigation,
+  writeNavigation,
+  clearNavigation,
+} from "./navigation.js";
+import {
   DEFAULT_START,
   DEFAULT_WEEK_COUNT,
   MAX_WEEK_COUNT,
@@ -33,6 +45,8 @@ import {
   PRINCIPLES,
   calendarInstant,
   weekGoals,
+  hasScheduledTime,
+  occurrenceLabel,
 } from "../../shared/domain.js";
 import {
   newGoal,
@@ -41,6 +55,9 @@ import {
   hasGoalContent,
   hasTacticContent,
   planWithinWeeks,
+  modelWeekFor,
+  timetableForWeek,
+  withWeekModel,
 } from "../../shared/planning.js";
 import {
   VisionEditor,
@@ -48,10 +65,20 @@ import {
   ResponsibilityEditor,
   CommitmentWheel,
   WeekCalendar,
+  EXECUTION_DRAG_TYPE,
 } from "./PlanningWidgets.jsx";
+import DaySchedule from "./DaySchedule.jsx";
+import CurrentWeekPlan from "./CurrentWeekPlan.jsx";
+
+import ExecutionPicker from "./ExecutionPicker.jsx";
+import QuickTacticForm from "./QuickTacticForm.jsx";
+
 import "./style.css";
 import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
 import WritingGuide from "./WritingGuide.jsx";
+import WeeklyPlanPreview from "./WeeklyPlanPreview.jsx";
+
+const CalendarMergePlanner = lazy(() => import("./CalendarMergePlanner.jsx"));
 import { updateVision } from "../../shared/vision-links.js";
 import {
   VisionReference,
@@ -125,7 +152,7 @@ function Guide({ ids }) {
     </aside>
   );
 }
-function Modal({ title, children, onClose }) {
+function Modal({ title, children, onClose, className = "" }) {
   const container = useRef(null);
   useEffect(() => {
     const previous = document.activeElement;
@@ -173,7 +200,7 @@ function Modal({ title, children, onClose }) {
     >
       <section
         ref={container}
-        className="modal"
+        className={`modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -191,11 +218,13 @@ function Modal({ title, children, onClose }) {
 }
 
 function App() {
+  const navigationEpoch = useRef(0);
   const [profile, setProfile] = useState(null),
     [ready, setReady] = useState(false),
     [cycle, setCycle] = useState(null),
     [view, setView] = useState("plan"),
     [error, setError] = useState(""),
+    [restoreError, setRestoreError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [principles, setPrinciples] = useState(false),
@@ -231,7 +260,10 @@ function App() {
     } catch (e) {
       setError(e.message);
       if (e.status === 401) {
+        navigationEpoch.current++;
         localStorage.removeItem("twelve.token");
+        clearNavigation();
+        setRestoreError("");
         setProfile(null);
         setCycle(null);
       }
@@ -242,29 +274,64 @@ function App() {
   }
   useEffect(() => {
     (async () => {
-      if (token())
-        await run(async () => setProfile((await api("/me")).profile));
+      if (token()) {
+        await run(async () => {
+          const me = await api("/me");
+          setProfile(me.profile);
+          const saved = readNavigation();
+          if (saved.cycle && !connectionRequest()) {
+            try {
+              const c = await api(`/cycles/${saved.cycle}`);
+              setCycle(c);
+              setView(c.status === "draft" ? "plan" : saved.view || "week");
+            } catch (e) {
+              if (e.status === 404) clearNavigation();
+              else {
+                setRestoreError(`이전 화면을 복원하지 못했어요. ${e.message}`);
+                throw e;
+              }
+            }
+          }
+        });
+      } else clearNavigation();
       setReady(true);
     })();
   }, []);
+  useEffect(() => {
+    if (ready && !profile) clearNavigation();
+    else if (ready && profile && cycle && !aiAuthorization)
+      writeNavigation({ cycle: cycle.id, view });
+  }, [ready, profile?.id, cycle?.id, view, aiAuthorization]);
   useEffect(() => {
     if (!notice) return;
     const id = setTimeout(() => setNotice(""), 4000);
     return () => clearTimeout(id);
   }, [notice]);
-  const open = async (id) =>
-    run(async () => {
+  const open = async (id) => {
+    const epoch = ++navigationEpoch.current;
+    return run(async () => {
       const c = await api(`/cycles/${id}`);
+      if (epoch !== navigationEpoch.current) return;
+      setRestoreError("");
+      writeNavigation({
+        cycle: c.id,
+        view: c.status === "draft" ? "plan" : "week",
+      });
       setCycle(c);
       setView(c.status === "draft" ? "plan" : "week");
     });
-  const logout = () =>
-    run(async () => {
+  };
+  const logout = () => {
+    navigationEpoch.current++;
+    return run(async () => {
       await api("/sessions/current", { method: "DELETE" });
       localStorage.removeItem("twelve.token");
+      clearNavigation();
+      setRestoreError("");
       setProfile(null);
       setCycle(null);
     });
+  };
   if (!ready) return <div className="loading">나의 12주를 불러오는 중…</div>;
   return (
     <>
@@ -275,7 +342,12 @@ function App() {
             className="brand"
             onClick={(e) => {
               e.preventDefault();
-              navigate(() => setCycle(null));
+              navigate(() => {
+                navigationEpoch.current++;
+                clearNavigation();
+                setRestoreError("");
+                setCycle(null);
+              });
             }}
           >
             <span className="brand-mark">
@@ -297,7 +369,14 @@ function App() {
               <nav>
                 <button
                   className={!cycle ? "selected" : ""}
-                  onClick={() => navigate(() => setCycle(null))}
+                  onClick={() =>
+                    navigate(() => {
+                      navigationEpoch.current++;
+                      clearNavigation();
+                      setRestoreError("");
+                      setCycle(null);
+                    })
+                  }
                 >
                   <BookOpen size={18} />
                   나의 12주
@@ -358,10 +437,16 @@ function App() {
               한국 시간 · 하루 마감 04:00
             </span>
           </div>
-          {error && (
+          {(error || restoreError) && (
             <div role="alert" className="error">
-              {error}
-              <button onClick={() => setError("")} aria-label="오류 닫기">
+              {error || restoreError}
+              <button
+                onClick={() => {
+                  setError("");
+                  setRestoreError("");
+                }}
+                aria-label="오류 닫기"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -384,6 +469,7 @@ function App() {
               run={run}
               busy={busy}
               onCreated={(c) => {
+                writeNavigation({ cycle: c.id, view: "plan" });
                 setCycle(c);
                 setView("plan");
               }}
@@ -700,6 +786,7 @@ function WeekCountField({
 }
 
 function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
+  const [initialNavigation] = useState(() => readNavigation(cycle.id));
   const [data, setData] = useState(() =>
       editablePlan(cycle.plan, {
         draft: cycle.status === "draft",
@@ -709,8 +796,16 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
     [title, setTitle] = useState(cycle.title),
     [start, setStart] = useState(cycle.start_date),
     [weekCount, setWeekCount] = useState(cycleWeeks(cycle)),
-    [tab, setTab] = useState(0),
-    [selectedGoalId, setSelectedGoalId] = useState(null),
+    [tab, setTab] = useState(initialNavigation.tab ?? 0),
+    [planView, setPlanView] = useState(initialNavigation.planView ?? "goal"),
+    [planWeek, setPlanWeek] = useState(
+      Math.max(1, Math.min(cycleWeeks(cycle), initialNavigation.planWeek ?? 1)),
+    ),
+    [calendarSession, setCalendarSession] = useState(null),
+    [calendarBusy, setCalendarBusy] = useState(false),
+    [selectedGoalId, setSelectedGoalId] = useState(
+      initialNavigation.goal ?? null,
+    ),
     [dirty, setDirty] = useState(false),
     [saving, setSaving] = useState(false),
     [starting, setStarting] = useState(false),
@@ -725,6 +820,16 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
   const planningGoals = data.goals.filter(hasGoalContent);
   const selectedGoal =
     planningGoals.find((g) => g.id === selectedGoalId) || planningGoals[0];
+  useEffect(() => {
+    writeNavigation({
+      cycle: cycle.id,
+      view: "plan",
+      tab,
+      planView,
+      planWeek,
+      goal: selectedGoal?.id,
+    });
+  }, [cycle.id, tab, planView, planWeek, selectedGoal?.id]);
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(start);
   const minimumWeeks =
     cycle.status === "active"
@@ -732,7 +837,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
       : 1;
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [tab]);
+  }, [tab, planView]);
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -770,6 +875,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
       });
       setCycle(c);
       setDirty(false);
+      setRemoteCycle(null);
       notify("계획을 저장했어요.");
       return c;
     } finally {
@@ -950,49 +1056,111 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           <Guide ids={["plan", "commitment"]} />
           <SectionTitle
             number="04–07"
-            title={`목표별 ${weekCount}주 계획`}
-            description="목표 전체를 보면서, 각 목표를 이루기 위한 행동을 정하세요. 목표를 선택하면 그 목표의 계획을 이어서 작성할 수 있어요."
+            title={`${planView === "week" ? "주차별" : "목표별"} ${weekCount}주 계획`}
+            description={
+              planView === "week"
+                ? "한 주에 약속한 전술을 모든 목표에서 모아 봅니다. 주마다 실행할 내용과 횟수를 함께 확인하세요."
+                : "목표 전체를 보면서, 각 목표를 이루기 위한 행동을 정하세요. 목표를 선택하면 그 목표의 계획을 이어서 작성할 수 있어요."
+            }
           />
           <div className="goal-plan-overview">
             <div className="section-heading">
               <p className="muted">
                 이번 {weekCount}주의 목표 {planningGoals.length}개
               </p>
-              <Button variant="light" onClick={() => setTab(1)}>
-                <ChevronLeft size={15} />
-                목표 목록 수정
-              </Button>
-            </div>
-            {planningGoals.length ? (
-              <nav className="goal-plan-selector" aria-label="목표별 계획 선택">
-                {planningGoals.map((g) => (
+              <div className="plan-view-controls">
+                <div
+                  className="format-switch"
+                  role="group"
+                  aria-label="계획 보기 방식"
+                >
                   <button
                     type="button"
-                    className="goal-plan-choice"
-                    key={g.id}
-                    aria-pressed={selectedGoal?.id === g.id}
-                    onClick={() => setSelectedGoalId(g.id)}
+                    aria-pressed={planView === "goal"}
+                    onClick={() => setPlanView("goal")}
                   >
-                    <span className="eyebrow">
-                      GOAL{" "}
-                      {String(
-                        data.goals.findIndex((x) => x.id === g.id) + 1,
-                      ).padStart(2, "0")}
-                    </span>
-                    <strong>{g.title.trim() || "이름 없는 목표"}</strong>
-                    <small>
-                      전술 {g.tactics.filter(hasTacticContent).length}개
-                    </small>
+                    목표별
                   </button>
-                ))}
-              </nav>
-            ) : (
-              <p className="goal-plan-empty">
-                먼저 목표 화면에서 이번 {weekCount}주에 이루고 싶은 목표를
-                나열해주세요.
-              </p>
-            )}
+                  <button
+                    type="button"
+                    aria-pressed={planView === "week"}
+                    onClick={() => setPlanView("week")}
+                  >
+                    주차별
+                  </button>
+                </div>
+                <Button variant="light" onClick={() => setTab(1)}>
+                  <ChevronLeft size={15} />
+                  목표 목록 수정
+                </Button>
+              </div>
+            </div>
+            {planView === "goal" &&
+              (planningGoals.length ? (
+                <nav
+                  className="goal-plan-selector"
+                  aria-label="목표별 계획 선택"
+                >
+                  {planningGoals.map((g) => (
+                    <button
+                      type="button"
+                      className="goal-plan-choice"
+                      key={g.id}
+                      aria-pressed={selectedGoal?.id === g.id}
+                      onClick={() => setSelectedGoalId(g.id)}
+                    >
+                      <span className="eyebrow">
+                        GOAL{" "}
+                        {String(
+                          data.goals.findIndex((x) => x.id === g.id) + 1,
+                        ).padStart(2, "0")}
+                      </span>
+                      <strong>{g.title.trim() || "이름 없는 목표"}</strong>
+                      <small>
+                        전술 {g.tactics.filter(hasTacticContent).length}개
+                      </small>
+                    </button>
+                  ))}
+                </nav>
+              ) : (
+                <p className="goal-plan-empty">
+                  먼저 목표 화면에서 이번 {weekCount}주에 이루고 싶은 목표를
+                  나열해주세요.
+                </p>
+              ))}
           </div>
+          {planView === "week" && (
+            <WeeklyPlanPreview
+              plan={data}
+              start={start}
+              weekCount={weekCount}
+              week={planWeek}
+              onSelectWeek={setPlanWeek}
+              status={cycle.status}
+              onEditGoal={(id) => {
+                setSelectedGoalId(id);
+                setPlanView("goal");
+              }}
+              calendarLabel={
+                dirty
+                  ? "저장하고 Apple Calendar와 비교"
+                  : "Apple Calendar와 비교"
+              }
+              calendarDisabled={busy || cycle.status === "complete"}
+              onCalendar={() =>
+                run(async () => {
+                  const fresh = dirty
+                    ? await save()
+                    : await api(`/cycles/${cycle.id}`);
+                  if (!dirty) acceptRemote(fresh);
+                  setCalendarSession({
+                    cycle: fresh,
+                    week: Math.min(planWeek, cycleWeeks(fresh)),
+                  });
+                })
+              }
+            />
+          )}
         </>
       )}
       <fieldset disabled={cycle.status === "complete"} className="plan-fields">
@@ -1147,7 +1315,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
             </div>
           </>
         )}
-        {tab === 2 && selectedGoal && (
+        {tab === 2 && planView === "goal" && selectedGoal && (
           <>
             {[selectedGoal].map((g) => (
               <section
@@ -1167,6 +1335,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                   {g.title.trim() || "이름 없는 목표"}
                 </h2>
                 <GoalVisionSummary plan={data} goal={g} />
+
                 <div className="two-col">
                   <div className="writing-section">
                     <WritingGuide step="success" weekCount={weekCount} />
@@ -1369,6 +1538,7 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
         {tab === 3 && (
           <>
             <Guide ids={["time", "process"]} />
+
             <section className="panel">
               <SectionTitle
                 number="08"
@@ -1376,6 +1546,13 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 description="월요일부터 일요일까지, 가장 생산적인 한 주를 캘린더에 그려보세요. 중요한 활동과 작은 업무, 재충전 시간을 함께 배치합니다."
               />
               <WritingGuide step="modelWeek" weekCount={weekCount} />
+              <Field
+                area
+                label="근무표에 맞춰 조정할 기준"
+                hint="예시 요일, 근무 여부에 따른 배치, 회사 업무와 개인 작업의 구분을 적어두세요."
+                value={data.modelWeekNotes || ""}
+                onChange={(e) => change("modelWeekNotes", e.target.value)}
+              />
               <ModelWeekEditor
                 blocks={data.modelWeek}
                 onChange={(v) => change("modelWeek", v)}
@@ -1538,6 +1715,40 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
           )}
         </button>
       )}
+      {calendarSession && (
+        <Modal
+          title="Apple Calendar와 주간 계획 비교"
+          className="calendar-merge-modal"
+          onClose={() => {
+            if (!calendarBusy) setCalendarSession(null);
+          }}
+        >
+          <Suspense
+            fallback={<p className="loading">캘린더 비교 화면을 여는 중…</p>}
+          >
+            <CalendarMergePlanner
+              cycle={calendarSession.cycle}
+              week={calendarSession.week}
+              onBusy={setCalendarBusy}
+              onApplied={(fresh, result) => {
+                setCycle(fresh);
+                setData(
+                  editablePlan(fresh.plan, {
+                    draft: fresh.status === "draft",
+                    weekCount: cycleWeeks(fresh),
+                  }),
+                );
+                setDirty(false);
+                setRemoteCycle(null);
+                setCalendarSession(null);
+                notify(
+                  `새 일정 ${result.created}개와 기존 일정 연결 ${result.linked}개를 반영했어요.`,
+                );
+              }}
+            />
+          </Suspense>
+        </Modal>
+      )}
       {starting && (
         <Modal
           title={`이번 ${weekCount}주를 시작할까요?`}
@@ -1621,10 +1832,11 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
           <small id={modeHintId}>
             {
               {
-                weekly: "선택한 각 주에 아래 횟수만큼 실행합니다.",
+                weekly:
+                  "선택한 각 주에 아래 횟수 이상 실행하기로 약속합니다. 더 실행해도 최소 기준은 늘어나지 않아요.",
                 daily:
                   "선택한 주의 매일 1회 실행합니다. 빠진 날을 다른 날로 대체하지 않아요.",
-                once: "선택한 각 주에 1회 실행합니다. 한 번만 할 행동이라면 주차 하나를 선택하세요.",
+                once: "선택한 각 주에 최소 1회 실행합니다. 한 번만 할 행동이라면 주차 하나를 선택하세요.",
               }[t.kind]
             }
           </small>
@@ -1632,7 +1844,7 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
         {t.kind === "weekly" && (
           <Field
             label="주당 횟수"
-            hint="선택한 각 주에 약속할 실행 횟수입니다."
+            hint="최소 약속입니다. 이 횟수 이상 실행하고, 초과 실행은 별도로 기록합니다."
             type="number"
             min={1}
             max={50}
@@ -1671,32 +1883,75 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
 }
 
 function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const [initialNavigation] = useState(() => readNavigation(cycle.id));
   const weekCount = cycleWeeks(cycle),
     reviewNumber = weekCount + 1;
   const [number, setNumber] = useState(() =>
-      Math.max(1, currentWeek(cycle.start_date, new Date(), weekCount)),
+      Math.max(
+        1,
+        Math.min(
+          reviewNumber,
+          initialNavigation.week ??
+            currentWeek(cycle.start_date, new Date(), weekCount),
+        ),
+      ),
     ),
     [week, setWeek] = useState(null),
-    [mode, setMode] = useState("day"),
-    [day, setDay] = useState(""),
+    [mode, setMode] = useState(initialNavigation.mode ?? "day"),
+    [day, setDay] = useState(initialNavigation.day ?? ""),
     [schedule, setSchedule] = useState(null),
+    [placement, setPlacement] = useState(null),
+    [addingTactic, setAddingTactic] = useState(null),
+    [dragItem, setDragItem] = useState(null),
+    [modelEdit, setModelEdit] = useState(null),
     [complete, setComplete] = useState(null),
     [review, setReview] = useState(null),
     [reflectionDirty, setReflectionDirty] = useState(false);
+  const scheduleHistory = useRef({ undo: [], redo: [] });
+  const [, updateScheduleHistory] = useState(0);
+  useEffect(() => {
+    scheduleHistory.current = { undo: [], redo: [] };
+    updateScheduleHistory((v) => v + 1);
+  }, [cycle.id, number]);
+  useEffect(() => {
+    writeNavigation({
+      cycle: cycle.id,
+      view: "week",
+      week: number,
+      mode,
+      day: day || undefined,
+    });
+  }, [cycle.id, number, mode, day]);
   const reviewDirty =
     !!week && JSON.stringify(review) !== JSON.stringify(week.state.review);
+  const modelDirty =
+    !!modelEdit &&
+    (modelEdit.applyToDefault ||
+      modelEdit.reset ||
+      JSON.stringify(modelEdit.blocks) !==
+        JSON.stringify(modelWeekFor(cycle.plan, number)));
   useEffect(() => {
     if (number === reviewNumber) return;
-    onDirty(reviewDirty);
+    onDirty(reviewDirty || modelDirty);
     return () => onDirty(false);
-  }, [reviewDirty, number]);
+  }, [reviewDirty, modelDirty, number]);
   const chooseWeek = (n) => {
     if (
-      (reviewDirty || reflectionDirty) &&
-      !window.confirm("저장하지 않은 평가를 버리고 이동할까요?")
+      (reviewDirty || reflectionDirty || modelDirty) &&
+      !window.confirm("저장하지 않은 내용을 버리고 이동할까요?")
     )
       return;
+    setModelEdit(null);
     setNumber(n);
+  };
+  const chooseMode = (next) => {
+    if (
+      modelDirty &&
+      !window.confirm("저장하지 않은 시간표 변경을 버리고 이동할까요?")
+    )
+      return;
+    setModelEdit(null);
+    setMode(next);
   };
   const prefix = `/cycles/${cycle.id}/weeks/${number}`;
   useEffect(() => {
@@ -1729,28 +1984,307 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
   }, [prefix, week?.today, day]);
   useEffect(() => {
     let live = true;
+    const keepReviewDraft =
+      week?.cycle_id === cycle.id && week.number === number && reviewDirty;
     setWeek(null);
     if (number <= weekCount)
       run(async () => {
         const w = await api(`/cycles/${cycle.id}/weeks/${number}`);
         if (live) {
           setWeek(w);
-          setDay(
-            w.today >= w.start && w.today <= addDays(w.start, 6)
-              ? w.today
-              : w.start,
+          setDay((previous) =>
+            previous >= w.start && previous <= addDays(w.start, 6)
+              ? previous
+              : w.today >= w.start && w.today <= addDays(w.start, 6)
+                ? w.today
+                : w.start,
           );
-          setReview(structuredClone(w.state.review));
+          if (!keepReviewDraft) setReview(structuredClone(w.state.review));
         }
       });
     return () => {
       live = false;
     };
-  }, [number, cycle.version]);
+  }, [number, cycle.id, cycle.version]);
   const apply = (w) => {
     setWeek(w);
     return w;
   };
+  const canEditModel =
+    !!week &&
+    cycle.status !== "complete" &&
+    addDays(week.start, 6) >= week.today;
+  const editWeekModel = () =>
+    setModelEdit({
+      blocks: structuredClone(modelWeekFor(cycle.plan, number)),
+      applyToDefault: false,
+      reset: false,
+      version: cycle.version,
+    });
+  useEffect(() => {
+    if (
+      mode === "plan" &&
+      week?.number === number &&
+      canEditModel &&
+      !modelEdit
+    )
+      editWeekModel();
+  }, [mode, number, week?.number, canEditModel, modelEdit, cycle.version]);
+  const saveWeekModel = () =>
+    run(async () => {
+      const preserveWeeks = Array.from(
+        { length: weekCount },
+        (_, i) => i + 1,
+      ).filter((w) => weekStart(cycle.start_date, w) <= week.today);
+      const plan = withWeekModel(cycle.plan, number, modelEdit.blocks, {
+        applyToDefault: modelEdit.applyToDefault,
+        preserveWeeks,
+        reset: modelEdit.reset,
+      });
+      const changed = await api(`/cycles/${cycle.id}`, {
+        method: "PUT",
+        body: {
+          version: modelEdit.version,
+          title: cycle.title,
+          startDate: cycle.start_date,
+          weekCount,
+          plan,
+        },
+      });
+      setModelEdit(null);
+      setCycle(changed);
+      notify("이번 주 시간표를 저장했어요.");
+    });
+  const changeSchedule = (
+    o,
+    input,
+    message = "일정을 저장했어요.",
+    close = false,
+    record = true,
+  ) => {
+    if (busy || cycle.status === "complete" || o.completed) return;
+    if (o.requiredDate && input.date !== o.requiredDate) {
+      notify("매일 해야 하는 실행은 다른 날짜로 옮길 수 없어요.");
+      return;
+    }
+    return run(async () => {
+      const before = scheduleSnapshot(
+        week.state.occurrences.find((item) => item.id === o.id),
+      );
+      const changed = await api(`${prefix}/occurrences/${o.id}/schedule`, {
+        method: "PUT",
+        body: { ...input, version: week.version },
+      });
+      apply(changed);
+      const after = scheduleSnapshot(
+        changed.state.occurrences.find((item) => item.id === o.id),
+      );
+      if (record && JSON.stringify(before) !== JSON.stringify(after)) {
+        // Undoing first-time placement hides the time while keeping the assigned
+        // evaluation day; it must not erase that day's scoring promise.
+        if (!before.date) before.date = after.date;
+        scheduleHistory.current.undo.push({ id: o.id, before, after });
+        scheduleHistory.current.undo = scheduleHistory.current.undo.slice(-50);
+        scheduleHistory.current.redo = [];
+        updateScheduleHistory((v) => v + 1);
+      }
+      if (close) {
+        setSchedule(null);
+        setPlacement(null);
+      }
+      notify(message);
+      return true;
+    });
+  };
+  function scheduleSnapshot(o) {
+    return {
+      date: o.date,
+      time: o.time,
+      minutes: o.minutes,
+      timePlaced: hasScheduledTime(o),
+    };
+  }
+  async function restoreSchedule(direction) {
+    if (busy || !week) return false;
+    const history = scheduleHistory.current,
+      entry = history[direction].at(-1);
+    if (!entry) return false;
+    const o = week.state.occurrences.find((item) => item.id === entry.id);
+    const expected = direction === "undo" ? entry.after : entry.before;
+    if (
+      !o ||
+      o.completed ||
+      JSON.stringify(scheduleSnapshot(o)) !== JSON.stringify(expected)
+    ) {
+      scheduleHistory.current = { undo: [], redo: [] };
+      updateScheduleHistory((v) => v + 1);
+      notify(
+        "실행 기록이 달라져 이전 배치를 되돌릴 수 없어요. 현재 일정을 확인해주세요.",
+      );
+      return false;
+    }
+    const result = await changeSchedule(
+      o,
+      direction === "undo" ? entry.before : entry.after,
+      direction === "undo"
+        ? "배치 변경을 되돌렸어요."
+        : "배치 변경을 다시 적용했어요.",
+      false,
+      false,
+    );
+    if (result) {
+      history[direction].pop();
+      history[direction === "undo" ? "redo" : "undo"].push(entry);
+      updateScheduleHistory((v) => v + 1);
+    }
+    return !!result;
+  }
+  const unplaceExecution = (o, close = false) =>
+    changeSchedule(
+      o,
+      {
+        date: o.date,
+        time: o.time,
+        minutes: o.minutes,
+        timePlaced: false,
+      },
+      "시간 배치를 해제했어요. 실행 약속과 평가 항목은 유지됩니다.",
+      close,
+    );
+  const addExecution = (tactic, input) => {
+    if (busy || cycle.status !== "active") return false;
+    if (input.date < week.today) {
+      notify("새 약속은 오늘 이후의 날짜에 추가해주세요.");
+      return false;
+    }
+    const unplaced = week.state.occurrences.filter(
+      (o) => o.tacticId === tactic.id && !o.completed && !hasScheduledTime(o),
+    ).length;
+    if (
+      !window.confirm(
+        `${tactic.title}\n이번 ${number}주차에 추가 실행 1회를 배치할까요?\n최소 약속 ${tactic.plannedCount}회와 평가 기준은 유지됩니다. 추가 실행을 못해도 점수가 깎이지 않아요.${unplaced ? `\n아직 배치하지 않은 기존 실행 ${unplaced}회도 남아 있어요.` : ""}`,
+      )
+    )
+      return false;
+    return run(async () => {
+      apply(
+        await api(`${prefix}/tactics/${tactic.id}/occurrences`, {
+          method: "POST",
+          body: { ...input, version: week.version, confirmed: true },
+        }),
+      );
+      setPlacement(null);
+      notify(
+        `추가 실행을 배치했어요. 최소 약속 ${tactic.plannedCount}회는 그대로예요.`,
+      );
+      return true;
+    });
+  };
+  const saveExecutionTactic = async (input) => {
+    let error;
+    const result = await run(async () => {
+      try {
+        const added = await api(`${prefix}/tactics`, {
+          method: "POST",
+          body: {
+            ...input,
+            version: week.version,
+            cycleVersion: cycle.version,
+            date: placement.date,
+            time: placement.time,
+            minutes: placement.minutes || 60,
+          },
+        });
+        apply(added.week);
+        setCycle(added.cycle);
+        setAddingTactic(null);
+        setPlacement(null);
+        notify("전술을 추가하고 이번 주 평가에 반영했어요.");
+        return true;
+      } catch (failure) {
+        error = failure.message;
+        throw failure;
+      }
+    });
+    return { ok: !!result, error };
+  };
+  const calendarBlocks = week
+    ? [
+        ...timetableForWeek(cycle.plan, number).map((b) => ({
+          ...b,
+          id: `model-${b.sourceWeek}-${b.id}`,
+          background: true,
+        })),
+        ...week.state.occurrences.filter(hasScheduledTime).map((o) => ({
+          ...o,
+          day: week.daily.findIndex((d) => d.date === o.date),
+          kind: "actual",
+          title: week.state.tactics.find((t) => t.id === o.tacticId).title,
+          locked: o.completed,
+        })),
+      ]
+    : [];
+  const hasWeeklyModel = cycle.plan.weeklyModelWeeks?.some(
+    (entry) => entry.week === number,
+  );
+  const referenceLabel = hasWeeklyModel ? "주차별 시간표" : "모범 주간";
+  const timetableSource = hasWeeklyModel
+    ? `${number}주차에 따로 저장한 시간표를 사용 중입니다.`
+    : "별도 시간표가 없어 기본 모범 주간을 사용 중입니다.";
+  const executionCalendar = week && (
+    <WeekCalendar
+      label="이번 주 일정 캘린더"
+      referenceLabel={referenceLabel}
+      dates={week.daily.map((d) => d.date)}
+      wrap={false}
+      readonly={busy || !canEditModel}
+      blocks={calendarBlocks}
+      dragItem={dragItem}
+      onCreate={(change) =>
+        setPlacement({
+          ...change,
+          date: week.daily[change.day].date,
+        })
+      }
+      onPlace={(id, change) => {
+        const o = week.state.occurrences.find(
+          (x) => x.id === id && !hasScheduledTime(x),
+        );
+        if (o)
+          changeSchedule(
+            o,
+            {
+              date: week.daily[change.day].date,
+              time: change.time,
+              minutes: o.minutes,
+            },
+            "실행을 배치했어요.",
+          );
+        setDragItem(null);
+      }}
+      onEdit={(o) =>
+        setSchedule(week.state.occurrences.find((x) => x.id === o.id))
+      }
+      onMove={(o, change) =>
+        changeSchedule(
+          o,
+          {
+            date: week.daily[change.day].date,
+            time: change.time,
+            minutes: o.minutes,
+          },
+          "일정을 옮겼어요.",
+        )
+      }
+      onResize={(o, change) =>
+        changeSchedule(
+          o,
+          { date: o.date, ...change },
+          "일정 시간을 조절했어요.",
+        )
+      }
+    />
+  );
   const download = () =>
     run(async () => {
       const blob = await api(`${prefix}/calendar.ics`, { blob: true });
@@ -1772,6 +2306,7 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
           }),
         ),
       );
+
     if (o.date === week.today)
       return run(async () =>
         apply(
@@ -1794,6 +2329,119 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
     });
   const start = weekStart(cycle.start_date, number),
     today = week?.today;
+  const weekModelEditor = modelEdit && week && canEditModel && (
+    <section
+      className="panel week-model-editor"
+      aria-label="주차별 모범 주간 조정"
+    >
+      <header className="section-heading">
+        <div>
+          <h2>{number}주차 근무·생활 시간표 조정</h2>
+          <p className="muted">
+            근무·생활 블록과 전술 실행을 같은 시간표에서 배치하세요. 근무·생활
+            변경은 이번 주 시간표를 저장해야 반영됩니다. 전술 실행은 배치할 때
+            바로 저장됩니다.
+          </p>
+        </div>
+      </header>
+      <ModelWeekEditor
+        key={`${cycle.id}-${number}`}
+        blocks={modelEdit.blocks}
+        wrap={false}
+        readonly={busy || !canEditModel}
+        initialCreationKind={mode === "plan" ? "strategy" : undefined}
+        Modal={Modal}
+        tactics={week.state.tactics}
+        occurrences={week.state.occurrences}
+        dates={week.daily.map((d) => d.date)}
+        executionBlocks={calendarBlocks.filter(
+          (b) => !b.background || b.day < 0,
+        )}
+        onEditExecution={(id) =>
+          setSchedule(week.state.occurrences.find((o) => o.id === id))
+        }
+        onPlaceExecution={(id, change) => {
+          const o = week.state.occurrences.find((x) => x.id === id);
+          return o
+            ? changeSchedule(
+                o,
+                {
+                  date: week.daily[change.day].date,
+                  time: change.time,
+                  minutes: change.minutes,
+                },
+                "전술 실행을 배치했어요.",
+              )
+            : false;
+        }}
+        onAddExecution={(tactic, change) =>
+          addExecution(tactic, {
+            date: week.daily[change.day].date,
+            time: change.time,
+            minutes: change.minutes,
+          })
+        }
+        onChange={(blocks) =>
+          setModelEdit((previous) => ({
+            ...previous,
+            blocks,
+            reset: false,
+          }))
+        }
+      />
+      <label className="week-model-option">
+        <input
+          type="checkbox"
+          checked={modelEdit.applyToDefault}
+          disabled={busy || modelEdit.reset}
+          onChange={(e) =>
+            setModelEdit({ ...modelEdit, applyToDefault: e.target.checked })
+          }
+        />
+        기본 모범 주간에도 반영하기
+      </label>
+      <p className="footnote">
+        체크하면 별도 설정이 없는 미래 주의 기본 시간표에도 반영합니다. 이미
+        시작한 다른 주와 주차별로 조정한 시간표는 보존합니다. 실제 실행의
+        배치·완료 기록·점수는 그대로 유지됩니다.
+      </p>
+      <div className="week-model-actions">
+        <Button
+          disabled={busy || !canEditModel || (mode === "plan" && !modelDirty)}
+          onClick={saveWeekModel}
+        >
+          <Save size={16} />
+          이번 주 시간표 저장
+        </Button>
+        <Button
+          type="button"
+          variant="outlined"
+          disabled={busy || !modelDirty}
+          onClick={() => {
+            if (mode === "plan") editWeekModel();
+            else setModelEdit(null);
+          }}
+        >
+          {mode === "plan" ? "변경 취소" : "취소"}
+        </Button>
+        <button
+          type="button"
+          className="text-button"
+          disabled={busy}
+          onClick={() =>
+            setModelEdit({
+              ...modelEdit,
+              blocks: structuredClone(cycle.plan.modelWeek),
+              reset: true,
+              applyToDefault: false,
+            })
+          }
+        >
+          이번 주 별도 설정 해제
+        </button>
+      </div>
+    </section>
+  );
   return (
     <>
       <header className="page-heading">
@@ -1864,71 +2512,117 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
         <div className="loading">이번 주 계획을 불러오는 중…</div>
       ) : (
         <>
-          <div className="stats">
-            <article className="main-stat">
-              <div>
-                <small>
-                  WEEK {String(number).padStart(2, "0")} · 주간 실행 점수
-                </small>
-                <strong>{percentage(week.score.score)}</strong>
-              </div>
-              <div
-                className="score-ring"
-                style={{ "--progress": `${(week.score.score || 0) * 3.6}deg` }}
-              >
-                <span>
-                  {week.score.rows.filter((t) => t.complete).length}
-                  <small>/ {week.score.rows.length} 전술 완료</small>
-                </span>
-              </div>
-            </article>
-            <article>
-              <small>이번 주 실행</small>
-              <strong>
-                {week.state.occurrences.filter((o) => o.completed).length}
-                <em> / {week.state.occurrences.length}회</em>
-              </strong>
-              <p>전술별 실행률을 같은 비중으로 평가</p>
-            </article>
-            <article>
-              <small>아직 배치하지 않은 실행</small>
-              <strong>
-                {week.state.occurrences.filter((o) => !o.date).length}
-                <em>회</em>
-              </strong>
-              <button
-                className="text-button"
-                onClick={() => setMode("schedule")}
-              >
-                모범 주간을 보며 배치
-                <ArrowRight size={16} />
-              </button>
-            </article>
-          </div>
+          {mode !== "plan" && (
+            <div className="stats">
+              <article className="main-stat">
+                <div>
+                  <small>
+                    WEEK {String(number).padStart(2, "0")} · 주간 실행 점수
+                  </small>
+                  <strong>{percentage(week.score.score)}</strong>
+                </div>
+                <div
+                  className="score-ring"
+                  style={{
+                    "--progress": `${(week.score.score || 0) * 3.6}deg`,
+                  }}
+                >
+                  <span>
+                    {week.score.rows.filter((t) => t.complete).length}
+                    <small>/ {week.score.rows.length} 전술 완료</small>
+                  </span>
+                </div>
+              </article>
+              <article>
+                <small>이번 주 실제 실행 / 최소 약속</small>
+                <strong>
+                  {week.state.occurrences.filter((o) => o.completed).length}
+                  <em>
+                    {" "}
+                    /{" "}
+                    {week.state.tactics.reduce(
+                      (sum, t) => sum + t.plannedCount,
+                      0,
+                    )}
+                    회
+                  </em>
+                </strong>
+                <p>전술별 최소 약속 달성률 · 최대 100%</p>
+              </article>
+              <article>
+                <small>아직 배치하지 않은 실행</small>
+                <strong>
+                  {
+                    week.state.occurrences.filter(
+                      (o) => !o.completed && !hasScheduledTime(o),
+                    ).length
+                  }
+                  <em>회</em>
+                </strong>
+                <button
+                  className="text-button"
+                  onClick={() => chooseMode("schedule")}
+                >
+                  이번 주 시간표를 보며 배치
+                  <ArrowRight size={16} />
+                </button>
+              </article>
+            </div>
+          )}
           <div className="tabs execution-tabs">
             <button
+              className={mode === "plan" ? "active" : ""}
+              onClick={() => chooseMode("plan")}
+            >
+              <Target size={17} />
+              이번 주 계획표
+            </button>
+            <button
               className={mode === "day" ? "active" : ""}
-              onClick={() => setMode("day")}
+              onClick={() => chooseMode("day")}
             >
               <Check size={17} />
               일간 실행 · 10분
             </button>
             <button
               className={mode === "schedule" ? "active" : ""}
-              onClick={() => setMode("schedule")}
+              onClick={() => chooseMode("schedule")}
             >
               <CalendarDays size={17} />
               주간 일정
             </button>
             <button
               className={mode === "review" ? "active" : ""}
-              onClick={() => setMode("review")}
+              onClick={() => chooseMode("review")}
             >
               <BookOpen size={17} />
               주간 평가 · 30분
             </button>
           </div>
-          {mode === "day" && (
+
+          {mode === "plan" && (
+            <CurrentWeekPlan
+              week={week}
+
+              timetable={
+                canEditModel && !weekModelEditor ? (
+                  <p className="loading">시간표 편집을 준비하는 중…</p>
+                ) : (
+                  weekModelEditor || executionCalendar
+                )
+              }
+              timetableSource={timetableSource}
+              editingTimetable={!!weekModelEditor}
+              onExport={download}
+              exportDisabled={modelDirty}
+              readonly={busy || cycle.status === "complete"}
+              scheduleReadonly={!canEditModel}
+              onSchedule={setSchedule}
+              onCalendar={() => chooseMode("schedule")}
+            />
+          )}
+          {modelEdit && mode !== "plan" && weekModelEditor}
+          {mode === "day" && !modelEdit && (
             <>
               <Guide ids={["moment"]} />
               <WritingGuide step="daily" weekCount={weekCount} />
@@ -1944,10 +2638,69 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
                       {d.date === today ? " · 오늘" : ""}
                     </small>
                     <strong>{Number(d.date.slice(8))}</strong>
-                    <span>{d.planned ? percentage(d.score) : "계획 없음"}</span>
+                    <span>
+                      {d.planned
+                        ? percentage(d.score)
+                        : d.extraPlanned
+                          ? "기본 약속 없음"
+                          : "계획 없음"}
+                    </span>
+                    {d.extraPlanned > 0 && (
+                      <small>
+                        추가 실행 {d.extraDone}/{d.extraPlanned}회
+                      </small>
+                    )}
                   </button>
                 ))}
               </div>
+              <DaySchedule
+                onEditModel={canEditModel ? editWeekModel : undefined}
+                blocks={calendarBlocks}
+                referenceLabel={referenceLabel}
+                timetableSource={timetableSource}
+                day={week.daily.findIndex((d) => d.date === day)}
+                date={day}
+                readonly={busy || cycle.status === "complete"}
+                onCreate={(change) => setPlacement({ ...change, date: day })}
+                onEdit={(o) =>
+                  setSchedule(week.state.occurrences.find((x) => x.id === o.id))
+                }
+                canUndo={scheduleHistory.current.undo.length > 0}
+                canRedo={scheduleHistory.current.redo.length > 0}
+                onUndo={() => restoreSchedule("undo")}
+                onRedo={() => restoreSchedule("redo")}
+                onRemove={
+                  canEditModel
+                    ? (block) =>
+                        unplaceExecution(
+                          week.state.occurrences.find((o) => o.id === block.id),
+                        )
+                    : undefined
+                }
+                onMove={(block, change) =>
+                  changeSchedule(
+                    week.state.occurrences.find((o) => o.id === block.id),
+                    {
+                      date: week.daily[change.day].date,
+                      time: change.time,
+                      minutes: block.minutes,
+                    },
+                    "실행 시간을 옮겼어요.",
+                  )
+                }
+                onResize={(block, change) =>
+                  changeSchedule(
+                    week.state.occurrences.find((o) => o.id === block.id),
+                    {
+                      date: week.state.occurrences.find(
+                        (o) => o.id === block.id,
+                      ).date,
+                      ...change,
+                    },
+                    "실행 시간의 길이를 조절했어요.",
+                  )
+                }
+              />
               <section className="panel">
                 <header className="section-heading">
                   <div>
@@ -1960,6 +2713,8 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
                   <span className="pill">
                     {week.daily.find((d) => d.date === day)?.done} /{" "}
                     {week.daily.find((d) => d.date === day)?.planned} 실행
+                    {week.daily.find((d) => d.date === day)?.extraPlanned > 0 &&
+                      ` · 추가 실행 ${week.daily.find((d) => d.date === day).extraDone}회 완료`}
                   </span>
                 </header>
                 <div className="task-list">
@@ -1995,9 +2750,15 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
                           </button>
                           <div>
                             <span className="task-meta">
-                              {o.time} · {o.minutes}분 · {t.goalTitle}
+                              {hasScheduledTime(o)
+                                ? `${o.time} · ${o.minutes}분`
+                                : "시간 미배치"}{" "}
+                              · {t.goalTitle}
                             </span>
                             <h3>{t.title}</h3>
+                            {o.extra && (
+                              <small>추가 실행 · 일간 점수 기준 제외</small>
+                            )}
                             <p>{t.condition}</p>
                           </div>
                           <button
@@ -2039,87 +2800,63 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
               </section>
             </>
           )}
-          {mode === "schedule" && (
+          {mode === "schedule" && !modelEdit && (
             <>
               <Guide ids={["time", "process"]} />
               <WritingGuide step="weekly" weekCount={weekCount} />
               <div className="section-heading">
                 <div>
-                  <h2>모범 주간 위에 이번 주를 배치하세요.</h2>
+                  <h2>{number}주차 시간표에 실행을 배치하세요.</h2>
                   <p className="muted">
-                    점선은 모범 주간, 실선은 실제 계획입니다. 시간 블록을 눌러
-                    수정하거나 끌어 옮길 수 있어요. 새벽 0–3시 일정은 다음 날
-                    새벽입니다.
+                    {timetableSource} 점선은 근무·생활 시간표, 실선은 실제
+                    실행입니다. 아래 실행을 끌어 놓고, 블록 위·아래 손잡이로
+                    시간을 조절하세요. 새벽 0–3시는 다음 날 새벽입니다.
                   </p>
                 </div>
-                <Button variant="outlined" onClick={download}>
-                  <Download size={16} />
-                  Apple 캘린더로 내보내기
-                </Button>
+                <div className="week-model-actions">
+                  <Button
+                    variant="outlined"
+                    disabled={busy || !canEditModel}
+                    onClick={editWeekModel}
+                  >
+                    이번 주 시간표 조정
+                  </Button>
+                  <Button variant="outlined" onClick={download}>
+                    <Download size={16} />
+                    Apple 캘린더로 내보내기
+                  </Button>
+                </div>
               </div>
               <p className="footnote">
-                .ics 파일 가져오기 방식입니다. 앱에서 바꾼 일정은 자동
-                동기화되지 않으므로, 다시 가져올 때 기존 일정을 확인하세요.
+                .ics 파일에 이번 주 근무·생활 시간표와 배치한 실행을 함께
+                담습니다. 앱에서 바꾼 일정은 자동 동기화되지 않으므로, 다시
+                가져올 때 기존 일정을 확인하세요.
               </p>
-              <div className="calendar-schedule-panel">
-                <WeekCalendar
-                  label="이번 주 일정 캘린더"
-                  dates={week.daily.map((d) => d.date)}
-                  wrap={false}
-                  readonly={cycle.status === "complete"}
-                  blocks={[
-                    ...cycle.plan.modelWeek.map((b) => ({
-                      ...b,
-                      id: `model-${b.id}`,
-                      background: true,
-                    })),
-                    ...week.state.occurrences
-                      .filter((o) => o.date)
-                      .map((o) => ({
-                        ...o,
-                        day: week.daily.findIndex((d) => d.date === o.date),
-                        kind: "actual",
-                        title: week.state.tactics.find(
-                          (t) => t.id === o.tacticId,
-                        ).title,
-                        locked: o.completed,
-                      })),
-                  ]}
-                  onEdit={(o) =>
-                    setSchedule(
-                      week.state.occurrences.find((x) => x.id === o.id),
-                    )
-                  }
-                  onMove={(o, change) =>
-                    run(async () => {
-                      apply(
-                        await api(`${prefix}/occurrences/${o.id}/schedule`, {
-                          method: "PUT",
-                          body: {
-                            version: week.version,
-                            date: week.daily[change.day].date,
-                            time: change.time,
-                            minutes: o.minutes,
-                          },
-                        }),
-                      );
-                      notify("일정을 옮겼어요.");
-                    })
-                  }
-                />
-              </div>
+              <div className="calendar-schedule-panel">{executionCalendar}</div>
               <section className="panel">
                 <h2>배치할 실행</h2>
                 <p className="muted">
-                  횟수는 주간 계획으로 정해져 있어요. 같은 주 안에서 실행할
-                  날짜와 시간을 선택하세요.
+                  실행을 캘린더의 원하는 시간대로 끌어 놓으세요. 눌러서 날짜와
+                  시간을 입력할 수도 있어요. 횟수는 주간 계획을 따릅니다.
                 </p>
                 <div className="unscheduled">
                   {week.state.occurrences
-                    .filter((o) => !o.date)
+                    .filter((o) => !o.completed && !hasScheduledTime(o))
                     .map((o) => (
                       <button
-                        disabled={cycle.status === "complete"}
+                        disabled={busy || cycle.status === "complete"}
+                        draggable={!busy && cycle.status !== "complete"}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(EXECUTION_DRAG_TYPE, o.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragItem({
+                            ...o,
+                            title: week.state.tactics.find(
+                              (t) => t.id === o.tacticId,
+                            ).title,
+                          });
+                        }}
+                        onDragEnd={() => setDragItem(null)}
                         key={o.id}
                         onClick={() => setSchedule(o)}
                       >
@@ -2128,13 +2865,15 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
                           week.state.tactics.find((t) => t.id === o.tacticId)
                             .title
                         }
-                        <small>{Number(o.id.split("~")[1]) + 1}회차</small>
+                        <small>
+                          {occurrenceLabel(o, week.state.occurrences)}
+                        </small>
                       </button>
                     ))}
                 </div>
-                {week.state.occurrences.every((o) => o.date) && (
-                  <p className="muted">모든 실행을 배치했어요.</p>
-                )}
+                {week.state.occurrences.every(
+                  (o) => o.completed || hasScheduledTime(o),
+                ) && <p className="muted">남은 실행을 모두 배치했어요.</p>}
               </section>
             </>
           )}
@@ -2169,7 +2908,10 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
                         <strong>{t.title}</strong>
                       </span>
                       <span>
-                        {t.done}/{t.plannedCount}
+                        {t.done}회 실행 / 최소 {t.plannedCount}회
+                        {t.over > 0 && (
+                          <small>최소 약속 달성 · 초과 실행 {t.over}회</small>
+                        )}
                       </span>
                       <span>
                         {percentage(t.rate * 100)}
@@ -2289,18 +3031,81 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
               busy={busy}
               onClose={() => setSchedule(null)}
               onSave={(input) =>
-                run(async () => {
-                  apply(
-                    await api(`${prefix}/occurrences/${schedule.id}/schedule`, {
-                      method: "PUT",
-                      body: { ...input, version: week.version },
-                    }),
-                  );
-                  setSchedule(null);
-                  notify("일정을 저장했어요.");
-                })
+                changeSchedule(schedule, input, "일정을 저장했어요.", true)
+              }
+              onRemove={
+                !schedule.completed &&
+                hasScheduledTime(schedule) &&
+                addDays(week.start, 6) >= week.today &&
+                cycle.status !== "complete"
+                  ? () => unplaceExecution(schedule, true)
+                  : undefined
               }
             />
+          )}
+          {placement && (
+            <Modal
+              title="이 시간에 실행 배치"
+              onClose={() => {
+                setPlacement(null);
+                setAddingTactic(null);
+              }}
+            >
+              <p>
+                {placement.date} 평가일 · {placement.time}{" "}
+                {+placement.time.slice(0, 2) < 4 ? "(다음 날 새벽)" : ""}
+              </p>
+              {addingTactic ? (
+                <QuickTacticForm
+                  goal={cycle.plan.goals.find(
+                    (goal) => goal.id === addingTactic.goalId,
+                  )}
+                  source={addingTactic.source}
+                  week={week}
+                  weekCount={weekCount}
+                  busy={busy}
+                  onSave={saveExecutionTactic}
+                  onCancel={() => setAddingTactic(null)}
+                />
+              ) : (
+                <ExecutionPicker
+                  cycle={cycle}
+                  week={week}
+                  placement={placement}
+                  busy={busy}
+                  onAdd={
+                    addDays(week.start, 6) >= week.today &&
+                    cycle.status === "active"
+                      ? (goalId, source) => setAddingTactic({ goalId, source })
+                      : undefined
+                  }
+                  onPlace={(o) =>
+                    changeSchedule(
+                      o,
+                      {
+                        date: placement.date,
+                        time: placement.time,
+                        minutes: placement.minutes || o.minutes,
+                      },
+                      "실행을 배치했어요.",
+                      true,
+                    )
+                  }
+                  onExtra={
+                    cycle.status === "active" &&
+                    placement.date >= week.today &&
+                    addDays(week.start, 6) >= week.today
+                      ? (tactic) =>
+                          addExecution(tactic, {
+                            date: placement.date,
+                            time: placement.time,
+                            minutes: placement.minutes || 60,
+                          })
+                      : undefined
+                  }
+                />
+              )}
+            </Modal>
           )}
           {complete && (
             <CompletionModal
@@ -2333,7 +3138,15 @@ function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
     </>
   );
 }
-function ScheduleModal({ occurrence: o, tactic, week, busy, onClose, onSave }) {
+function ScheduleModal({
+  occurrence: o,
+  tactic,
+  week,
+  busy,
+  onClose,
+  onSave,
+  onRemove,
+}) {
   const [date, setDate] = useState(o.date || week.start),
     [time, setTime] = useState(o.time),
     [minutes, setMinutes] = useState(o.minutes);
@@ -2381,10 +3194,26 @@ function ScheduleModal({ occurrence: o, tactic, week, busy, onClose, onSave }) {
             : "날짜 변경은 같은 주 안에서 가능합니다."}{" "}
           00:00–03:59를 선택하면 다음 날 새벽에 배치됩니다.
         </p>
+        {onRemove && (
+          <p className="footnote">
+            배치 해제는 시간 블록만 지웁니다. 평가 날짜와 실행 약속은 그대로
+            남습니다.
+          </p>
+        )}
         <Button disabled={busy}>
           일정 저장
           <Check size={17} />
         </Button>
+        {onRemove && (
+          <Button
+            type="button"
+            variant="outlined"
+            disabled={busy}
+            onClick={onRemove}
+          >
+            배치 해제
+          </Button>
+        )}
       </form>
     </Modal>
   );

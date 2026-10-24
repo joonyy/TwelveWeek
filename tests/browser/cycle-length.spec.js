@@ -35,7 +35,7 @@ test("eleven-week setup, execution navigation and reflection follow the chosen p
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("계획을 저장했어요.");
   await page.reload();
-  await page.getByRole("button", { name: /나의 11주 실행/ }).click();
+
   await expect(page.getByLabel("실행 주수")).toHaveValue("11");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({

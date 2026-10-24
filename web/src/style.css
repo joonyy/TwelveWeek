@@ -1271,6 +1271,12 @@ main {
   color: #a5b098;
   font-size: 9px;
 }
+.unscheduled button[draggable="true"] {
+  cursor: grab;
+}
+.unscheduled button[draggable="true"]:active {
+  cursor: grabbing;
+}
 .big-score {
   font-size: 30px;
   color: #547c42;

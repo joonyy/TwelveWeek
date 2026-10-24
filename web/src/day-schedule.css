@@ -1,0 +1,420 @@
+.daily-schedule {
+  margin-bottom: 24px;
+}
+.daily-schedule-content {
+  display: grid;
+  grid-template-columns: minmax(250px, 420px) minmax(180px, 1fr);
+  align-items: start;
+  gap: 30px;
+}
+.daily-clock {
+  width: 100%;
+  max-width: 420px;
+  overflow: visible;
+}
+.daily-clock[data-editable="true"] {
+  touch-action: none;
+}
+.daily-clock-slot {
+  fill: #f7f9f2;
+  stroke: #dfe7d8;
+  stroke-width: 0.7;
+  cursor: pointer;
+  touch-action: none;
+}
+.daily-clock-slot:hover,
+.daily-clock-slot:focus-visible {
+  fill: #dceace;
+  outline: none;
+  stroke: #567d43;
+  stroke-width: 2;
+}
+.daily-clock-block {
+  stroke: white;
+  stroke-width: 1;
+}
+.daily-clock-block.reference {
+  fill: var(--block-color);
+  stroke: var(--block-border);
+  stroke-dasharray: 3 2;
+  opacity: 0.65;
+  cursor: help;
+}
+.daily-clock-block.reference:focus-visible {
+  outline: none;
+  stroke: var(--block-border);
+  stroke-width: 2;
+  opacity: 1;
+}
+.daily-clock-block.actual {
+  fill: var(--block-color);
+}
+.daily-clock-block.actual[role="button"] {
+  cursor: grab;
+  touch-action: none;
+}
+.daily-clock-block.actual.selected {
+  stroke: var(--block-border);
+  stroke-width: 3;
+  paint-order: stroke fill;
+  filter: brightness(0.9);
+}
+.daily-clock-block.actual.moving {
+  cursor: grabbing;
+  opacity: 0.8;
+}
+.daily-clock-resize {
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+}
+.daily-clock-resize-hit {
+  fill: transparent;
+  stroke: none;
+}
+.daily-clock-resize-arrow {
+  pointer-events: none;
+}
+.daily-clock-resize-arrow path {
+  fill: none;
+  stroke: var(--block-border);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.daily-clock-resize-arrow .daily-clock-resize-arrow-outline {
+  stroke: white;
+  stroke-width: 5;
+}
+.daily-clock-resize:hover .daily-clock-resize-arrow path:last-child,
+.daily-clock-resize:focus-visible .daily-clock-resize-arrow path:last-child {
+  stroke-width: 3;
+}
+.daily-schedule:focus {
+  outline: none;
+}
+.daily-schedule:focus-visible {
+  outline: 2px solid #8aa575;
+  outline-offset: 2px;
+}
+.daily-selection-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f6f8f1;
+  border: 1px solid #e0e7d8;
+  border-radius: 7px;
+}
+.daily-selection-tools > span {
+  flex: 1 1 180px;
+  font-size: 12px;
+  color: #42603a;
+  overflow-wrap: anywhere;
+}
+.daily-selection-tools .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.daily-shortcuts {
+  font-size: 10px;
+  color: #819274;
+  margin: 8px 0;
+  line-height: 1.7;
+}
+.daily-schedule-content {
+  margin-top: 18px;
+}
+.daily-clock-block.actual:hover,
+.daily-clock-block.actual:focus-visible {
+  filter: brightness(0.85);
+  outline: none;
+  stroke: var(--block-border);
+  stroke-width: 2;
+}
+.daily-clock-block.done {
+  opacity: 0.55;
+}
+.daily-clock-hour {
+  font-size: 11px;
+  fill: #77886c;
+  pointer-events: none;
+}
+.daily-clock-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  fill: #8e9e81;
+}
+.daily-clock-date {
+  font-size: 26px;
+  font-weight: 600;
+  fill: #254b39;
+}
+.daily-clock-note {
+  font-size: 9px;
+  fill: #8a997e;
+}
+.daily-clock-selection-arc {
+  fill: #98bb7fcc;
+  stroke: #3b662a;
+  stroke-width: 2;
+  pointer-events: none;
+}
+.daily-clock-now {
+  pointer-events: none;
+}
+.daily-clock-now line {
+  stroke: #ba6b55;
+  stroke-width: 1.5;
+}
+.daily-clock-now circle {
+  fill: #ba6b55;
+  stroke: white;
+  stroke-width: 1;
+}
+.daily-live-clock {
+  margin-bottom: 15px;
+}
+.daily-live-clock small {
+  margin: 0 !important;
+  letter-spacing: 1px;
+}
+.daily-live-clock time {
+  font-size: 36px;
+  color: #254b39;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.daily-live-clock time span {
+  font-size: 24px;
+  color: #819274;
+}
+.daily-block-detail {
+  min-height: 100px;
+  border-left: 3px solid #a4b890;
+  background: #f6f8f1;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 5px;
+}
+.daily-block-detail h3 {
+  font-size: 20px;
+  color: #2b4e37;
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+.daily-block-detail p {
+  margin: 0;
+}
+.daily-block-detail small {
+  margin: 0 !important;
+}
+.daily-range-label {
+  padding: 8px 0;
+  color: #426c30;
+  font-weight: 600;
+}
+.focus-timer {
+  border: 1px solid #dce6d4;
+  background: #fcfdf9;
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+.focus-timer header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.focus-timer h3 {
+  margin: 0;
+  color: #2b4e37;
+  font-size: 16px;
+}
+.focus-timer header span {
+  font-size: 10px;
+  color: #819274;
+}
+.timer-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.timer-modes button {
+  border: 1px solid #dce6d4;
+  background: white;
+  color: #819274;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.timer-modes button[aria-pressed="true"] {
+  background: #e6efde;
+  color: #3d642c;
+  border-color: #9db789;
+}
+.timer-countdown {
+  font-size: 52px;
+  font-weight: 500;
+  color: #254b39;
+  letter-spacing: 2px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.timer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.timer-actions .button {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+.focus-timer.short .timer-countdown,
+.focus-timer.long .timer-countdown {
+  color: #778458;
+}
+.daily-clock-guide {
+  color: #77866d;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.daily-clock-guide small {
+  display: block;
+  margin-top: 15px;
+  font-size: 10px;
+}
+.daily-clock-guide ul {
+  list-style: none;
+  padding: 0;
+}
+.daily-clock-guide li {
+  padding: 8px 0;
+  border-bottom: 1px solid #e3e9dd;
+}
+.daily-clock-guide li span {
+  display: block;
+  font-size: 10px;
+}
+.daily-clock-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.daily-clock-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: #819274;
+}
+.daily-clock-legend .reference::before {
+  background: #f1f3ec;
+  border: 1px dashed #819274;
+}
+.daily-block-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 12px 0;
+}
+.daily-block-colors > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.daily-block-colors i,
+.daily-block-swatch {
+  display: inline-block;
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+.daily-block-swatch {
+  margin-right: 6px;
+}
+@media (max-width: 650px) {
+  .daily-schedule-content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .daily-clock {
+    max-width: 360px;
+    margin: auto;
+  }
+  .daily-schedule .section-heading {
+    flex-wrap: wrap;
+  }
+}
+.week-model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.week-model-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 20px;
+  color: #4e6942;
+}
+.week-model-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: #527542;
+}
+
+.focus-timer.finished {
+  border-color: #90aa72;
+  background: #f2f6e9;
+}
+.timer-finished-message,
+.timer-audio-help {
+  color: #61794c;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 14px;
+}
+.timer-sound-test {
+  margin-top: 12px;
+  font-size: 11px;
+}
+.timer-alarm-banner {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 80;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid #90aa72;
+  border-radius: 10px;
+  padding: 18px;
+  background: #f2f6e9;
+  color: #36563d;
+  box-shadow: 0 8px 24px #234b3922;
+}
+.timer-alarm-banner strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+@media (max-width: 650px) {
+  .timer-alarm-banner {
+    right: 16px;
+    bottom: 84px;
+  }
+}

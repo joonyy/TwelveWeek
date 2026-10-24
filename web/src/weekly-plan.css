@@ -1,0 +1,161 @@
+.plan-view-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.plan-view-controls .format-switch button {
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.weekly-plan-preview {
+  min-width: 0;
+}
+.planning-week-selector {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 28px;
+}
+.planning-week-selector button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 12px;
+  background: #fff;
+  color: var(--ink);
+}
+.planning-week-selector button[aria-pressed="true"] {
+  background: #e9efdf;
+  border-color: #89a775;
+}
+.planning-week-selector button:focus-visible {
+  outline: 2px solid #6f985a;
+  outline-offset: 2px;
+}
+.planning-week-selector small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.weekly-plan-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.weekly-plan-heading h2 {
+  margin: 6px 0;
+}
+.weekly-plan-heading p {
+  margin: 0;
+}
+.weekly-plan-summary {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.weekly-plan-summary dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.weekly-plan-summary dd {
+  margin: 5px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.weekly-plan-note {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 18px 0 24px;
+}
+.weekly-plan-goal > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.weekly-plan-goal h3 {
+  margin: 5px 0 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.weekly-tactic-list {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+}
+.weekly-tactic-list > li {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.weekly-tactic-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+.weekly-tactic-title > strong {
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.weekly-tactic-title .pill {
+  flex-shrink: 0;
+}
+.weekly-tactic-list details {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.weekly-tactic-list summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.weekly-tactic-list details p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.weekly-unplaced {
+  border: 1px solid #d9c99f;
+  border-radius: 10px;
+  background: #faf7ed;
+  padding: 16px;
+  margin-bottom: 22px;
+  font-size: 12px;
+}
+.weekly-unplaced button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  padding: 10px 0 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .planning-week-selector {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 3px 3px 10px;
+  }
+  .planning-week-selector button {
+    flex: 0 0 110px;
+  }
+  .weekly-plan-summary {
+    gap: 24px;
+  }
+  .weekly-tactic-title {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

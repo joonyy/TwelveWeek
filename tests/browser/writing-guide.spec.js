@@ -96,7 +96,7 @@ test("writing prompts stay visible beside each step, adapt to ten weeks and pres
   await page
     .getByRole("button", { name: "시간 블록 추가", exact: true })
     .click();
-  await page.getByLabel("블록 종류").selectOption("buffer");
+  await page.getByLabel("블록 종류", { exact: true }).selectOption("buffer");
   await expect(
     page.getByText(
       "연락·정리처럼 사소하지만 필요한 업무를 모아 처리하는 시간입니다.",
@@ -143,7 +143,7 @@ test("writing prompts stay visible beside each step, adapt to ten weeks and pres
   const after = await save();
   expect(after.plan).toEqual(before.plan);
   await page.reload();
-  await page.getByRole("button", { name: /생각을 돕는 10주/ }).click();
+  await page.getByRole("tab", { name: /비전$/ }).click();
   await expect(guide("장기 비전")).toBeVisible();
   await page.getByRole("tab", { name: "10주 계획" }).click();
   await expect(page.getByLabel("성공 기준", { exact: true })).toHaveValue(

@@ -119,7 +119,7 @@ test("profile → guided plan → schedule → binary execution → weekly revie
     .fill("회복 후 오전에 실행이 편했다.");
   await page.getByRole("button", { name: "주간 평가 저장" }).click();
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+
   await page.getByRole("button", { name: "주간 평가 · 30분" }).click();
   await expect(page.getByLabel("선행지표 관찰")).toHaveValue("1회");
   await page.getByRole("button", { name: "비전과 12주 계획" }).click();

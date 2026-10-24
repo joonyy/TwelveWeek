@@ -52,7 +52,7 @@ test("vision partner imports, resumes, asks, edits with permission and undoes on
     "선택에 있어 가격을 고민하지 않는 삶을 살고 싶다.",
   );
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+
   await page.getByRole("button", { name: "AI와 비전 다듬기" }).click();
   await expect(page.getByRole("log")).toContainText("사랑하는 사람과의 경험");
   await expect(page.getByLabel("AI의 장기비전 직접 수정 허용")).toBeChecked();

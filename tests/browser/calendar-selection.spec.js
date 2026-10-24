@@ -107,7 +107,7 @@ test("draw model-week ranges, cancel, scroll and restore saved duration", async 
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("계획을 저장했어요.");
   await page.reload();
-  await page.getByRole("button", { name: /나의 첫 12주/ }).click();
+
   await page.getByRole("tab", { name: "모범 주간" }).click();
   await expect(
     calendar.getByRole("button", {
