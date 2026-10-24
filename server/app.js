@@ -27,7 +27,7 @@ import { calendar } from "./calendar.js";
 import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
-
+import { mountExecutionTacticRoutes } from "./execution-tactics.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -458,7 +458,14 @@ export function createApp({
     const { cycle, week } = await getWeek(pool, req);
     res.json(present(cycle, week));
   });
-
+  mountExecutionTacticRoutes(app, {
+    pool,
+    now,
+    getWeek,
+    present,
+    audit,
+    version,
+  });
   async function mutateWeek(req, kind, input, change) {
     return transaction(pool, async (db) => {
       const { cycle, week } = await getWeek(db, req, true);

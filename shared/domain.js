@@ -89,7 +89,11 @@ export function prepareWeek(plan, start, number, previous) {
         goalLeading: g.leading,
         goalLagging: g.lagging,
         goalMeasurement: g.measurement,
-        plannedCount: t.kind === "daily" ? 7 : t.kind === "once" ? 1 : t.count,
+        plannedCount:
+          t.kind === "daily"
+            ? 7
+            : (previous?.tacticCounts?.[t.id] ??
+              (t.kind === "once" ? 1 : t.count)),
       })),
   );
   const occurrences = tactics.flatMap((t) =>
@@ -125,12 +129,27 @@ export function prepareWeek(plan, start, number, previous) {
       };
     }),
   );
-
+  // Preserve optional attempts independently of the number of required slots.
+  occurrences.push(
+    ...(previous?.occurrences ?? [])
+      .filter(
+        (o) => o.extra === true && tactics.some((t) => t.id === o.tacticId),
+      )
+      .map((o) => structuredClone(o)),
+  );
   return {
     goals,
     tactics,
     occurrences,
-
+    ...(previous?.tacticCounts
+      ? {
+          tacticCounts: Object.fromEntries(
+            tactics
+              .filter((t) => t.kind !== "daily" && previous.tacticCounts[t.id])
+              .map((t) => [t.id, t.plannedCount]),
+          ),
+        }
+      : {}),
     review: previous?.review
       ? {
           ...previous.review,
@@ -164,9 +183,11 @@ export function weekGoals(state) {
 }
 export function scoreWeek(state) {
   const rows = state.tactics.map((t) => {
-    const done = state.occurrences.filter(
-      (o) => o.tacticId === t.id && o.completed,
+    const items = state.occurrences.filter((o) => o.tacticId === t.id);
+    const done = items.filter(
+      (o) => o.completed && (t.kind !== "daily" || !o.extra),
     ).length;
+    const extras = items.filter((o) => o.extra);
     const rate = Math.min(1, done / t.plannedCount);
     return {
       ...t,
@@ -175,6 +196,13 @@ export function scoreWeek(state) {
       complete: done >= t.plannedCount,
       weight: 100 / state.tactics.length,
       contribution: (100 / state.tactics.length) * rate,
+      ...(extras.length
+        ? {
+            extraPlanned: extras.length,
+            extraDone: extras.filter((o) => o.completed).length,
+            over: Math.max(0, done - t.plannedCount),
+          }
+        : {}),
     };
   });
   return {
@@ -183,12 +211,19 @@ export function scoreWeek(state) {
   };
 }
 export function scoreDay(state, date) {
-  const planned = state.occurrences.filter((o) => o.date === date);
+  const planned = state.occurrences.filter((o) => o.date === date && !o.extra);
+  const extras = state.occurrences.filter((o) => o.date === date && o.extra);
   const done = planned.filter((o) => o.completed).length;
   return {
     planned: planned.length,
     done,
     score: planned.length ? (done / planned.length) * 100 : null,
+    ...(extras.length
+      ? {
+          extraPlanned: extras.length,
+          extraDone: extras.filter((o) => o.completed).length,
+        }
+      : {}),
   };
 }
 // A date is an evaluation promise; removing a clock block does not remove it.

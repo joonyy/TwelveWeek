@@ -14,7 +14,25 @@ import {
   withWeekModel,
 } from "../shared/planning.js";
 import { planSchema } from "../server/schema.js";
-
+test("week-local counts survive rebuilding only that week and never change the base plan or daily dates", () => {
+  const plan = emptyPlan(3);
+  plan.goals[0].title = "주별 약속";
+  const t = plan.goals[0].tactics[0];
+  Object.assign(t, { title: "출근 산책", condition: "2km 걷기", count: 4 });
+  const before = structuredClone(plan);
+  const original = prepareWeek(plan, "2026-10-05", 2);
+  original.tacticCounts = { [t.id]: 5 };
+  const rebuilt = prepareWeek(plan, "2026-10-05", 2, original);
+  assert.equal(rebuilt.tactics[0].plannedCount, 5);
+  assert.equal(rebuilt.occurrences.length, 5);
+  assert.equal(prepareWeek(plan, "2026-10-05", 3).occurrences.length, 4);
+  assert.deepEqual(plan, before);
+  t.kind = "daily";
+  const daily = prepareWeek(plan, "2026-10-05", 2, original);
+  assert.equal(daily.tactics[0].plannedCount, 7);
+  assert.deepEqual(daily.tacticCounts, {});
+  assert.equal(new Set(daily.occurrences.map((o) => o.requiredDate)).size, 7);
+});
 test("weekly shift changes survive schema storage and shortening without changing execution plans or scores", () => {
   const plan = emptyPlan(3);
   plan.goals[0].title = "주간 실행";
