@@ -1,6 +1,7 @@
 import { createPool } from "../server/db.js";
 import { migrate } from "../server/migrate.js";
 import { createApp } from "../server/app.js";
+import { mockCalendarProvider } from "./calendar-fixture.js";
 const url = process.env.TEST_DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith("_test"))
   throw new Error("Browser tests require a dedicated _test database");
@@ -16,6 +17,7 @@ createApp({
   now: () => new Date("2026-10-07T12:00:00+09:00"),
   rateLimits: false,
   webOrigin: "http://127.0.0.1:5179",
+  calendarProvider: mockCalendarProvider().provider,
   aiEnv: {
     AI_SECRETS_KEY: "browser-test-only-secret-32-characters",
     API_PUBLIC_URL: "http://127.0.0.1:4111",

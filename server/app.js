@@ -26,6 +26,7 @@ import {
 import { calendar } from "./calendar.js";
 import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
+import { mountCalendarRoutes } from "./calendar-routes.js";
 
 import {
   hasGoalContent,
@@ -58,6 +59,7 @@ export function createApp({
   aiProvider,
   codex = null,
   aiEnv = process.env,
+  calendarProvider,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -194,7 +196,15 @@ export function createApp({
     rateLimits,
     env: aiEnv,
   });
-
+  mountCalendarRoutes(app, {
+    pool,
+    now,
+    owned,
+    audit,
+    rateLimits,
+    provider: calendarProvider,
+    env: aiEnv,
+  });
   app.get("/api/cycles", async (req, res) =>
     res.json(
       (
