@@ -1,0 +1,200 @@
+.plan-timeline {
+  min-width: 0;
+  margin-bottom: 24px;
+}
+.plan-timeline .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plan-timeline h2 {
+  margin: 10px 0;
+  color: #234b39;
+  font-size: 24px;
+}
+.plan-timeline-note {
+  color: #77856d;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.plan-timeline-scroll {
+  container-type: inline-size;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #dce5d3;
+  border-radius: 8px;
+}
+.plan-timeline-board {
+  min-width: calc(220px + var(--timeline-weeks) * 60px);
+}
+.plan-timeline-header,
+.plan-timeline-row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+.plan-timeline-track {
+  display: grid;
+  grid-template-columns: repeat(var(--timeline-weeks), minmax(0, 1fr));
+}
+.plan-timeline-header {
+  background: #f1f5eb;
+}
+.plan-timeline-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px 14px;
+  background: #fcfdf9;
+  border-right: 1px solid #dce5d3;
+  font-size: 12px;
+  color: #36563d;
+}
+.plan-timeline-label small {
+  margin-top: 4px;
+  color: #829477;
+  font-size: 10px;
+}
+.plan-timeline-week {
+  border: 0;
+  border-left: 1px solid #dce5d3;
+  background: transparent;
+  color: #526e43;
+  padding: 12px 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.plan-timeline-week small {
+  font-size: 10px;
+}
+.plan-timeline-week[aria-pressed="true"] {
+  background: #dcebcf;
+  box-shadow: inset 0 -3px #63884b;
+}
+.plan-timeline-goal > header {
+  position: sticky;
+  left: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  width: 100cqw;
+  padding: 12px 14px;
+}
+.plan-timeline-goal > header h3 {
+  margin: 0;
+  color: #234b39;
+  font-size: 14px;
+}
+.plan-timeline-goal > header button {
+  white-space: nowrap;
+  font-size: 11px;
+}
+.plan-timeline-row {
+  border-top: 1px solid #e8eddf;
+  min-height: 54px;
+}
+.plan-timeline-periods {
+  align-items: center;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% / var(--timeline-weeks) - 1px),
+    #e8eddf calc(100% / var(--timeline-weeks) - 1px),
+    #e8eddf calc(100% / var(--timeline-weeks))
+  );
+}
+.plan-timeline-bar {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 6px 3px;
+  padding: 8px;
+  background: #e0ecd6;
+  border: 1px solid #b4c99c;
+  border-radius: 5px;
+  color: #3b603a;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.plan-timeline-bar.once {
+  background: #f5edce;
+  border-color: #d8c582;
+  color: #806b33;
+}
+.plan-timeline-bar.once svg {
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.plan-timeline-bar.daily {
+  background: #e4edf0;
+  border-color: #bacdd3;
+  color: #456a74;
+}
+.plan-timeline-bar:hover,
+.plan-timeline-bar:focus-visible {
+  filter: brightness(0.94);
+  outline: 2px solid #63884b;
+  outline-offset: -2px;
+}
+.plan-timeline-unassigned {
+  grid-column: 1 / -1;
+  padding: 10px;
+  color: #987245;
+  font-size: 11px;
+}
+.plan-timeline-selected {
+  margin-top: 20px;
+}
+.plan-timeline-selected > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.plan-timeline-selected h3 {
+  font-size: 16px;
+  color: #36563d;
+  margin: 0;
+}
+.plan-timeline-selected-goals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #526e43;
+}
+.plan-timeline-selected-goals ul {
+  padding-left: 18px;
+  margin: 7px 0;
+  line-height: 1.8;
+}
+.plan-timeline-selected-goals small {
+  color: #829477;
+}
+@media (max-width: 650px) {
+  .plan-timeline-header,
+  .plan-timeline-row {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+  .plan-timeline-board {
+    min-width: calc(150px + var(--timeline-weeks) * 86px);
+  }
+  .plan-timeline-selected-goals {
+    grid-template-columns: 1fr;
+  }
+  .plan-timeline-label {
+    padding: 8px;
+    font-size: 11px;
+  }
+}

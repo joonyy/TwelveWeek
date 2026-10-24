@@ -77,6 +77,7 @@ import "./style.css";
 import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
 import WritingGuide from "./WritingGuide.jsx";
 import WeeklyPlanPreview from "./WeeklyPlanPreview.jsx";
+import PlanTimeline from "./PlanTimeline.jsx";
 
 const CalendarMergePlanner = lazy(() => import("./CalendarMergePlanner.jsx"));
 import { updateVision } from "../../shared/vision-links.js";
@@ -1538,7 +1539,24 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
         {tab === 3 && (
           <>
             <Guide ids={["time", "process"]} />
-
+            <PlanTimeline
+              plan={data}
+              start={start}
+              weekCount={weekCount}
+              week={planWeek}
+              onSelectWeek={setPlanWeek}
+              status={cycle.status}
+              onEditGoal={(id) => {
+                setSelectedGoalId(id);
+                setPlanView("goal");
+                setTab(2);
+              }}
+              onDetails={(number) => {
+                setPlanWeek(number);
+                setPlanView("week");
+                setTab(2);
+              }}
+            />
             <section className="panel">
               <SectionTitle
                 number="08"

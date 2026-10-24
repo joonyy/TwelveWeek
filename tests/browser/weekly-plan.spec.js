@@ -2,6 +2,137 @@ import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { emptyPlan } from "../../shared/domain.js";
 
+test("model week shows the full milestone timeline, week details and unsaved plan changes without adding data", async ({
+  page,
+  request,
+}) => {
+  const base = "http://127.0.0.1:4111/api";
+  const profile = await (
+    await request.post(`${base}/profiles`, {
+      data: { name: `로드맵 ${randomUUID().slice(0, 8)}` },
+    })
+  ).json();
+  const { token } = await (
+    await request.post(`${base}/sessions`, { data: { profileId: profile.id } })
+  ).json();
+  const headers = { Authorization: `Bearer ${token}` };
+  const plan = emptyPlan(10);
+  plan.goals[0].title = "학습을 공개로 연결하기";
+  Object.assign(plan.goals[0].tactics[0], {
+    title: "단원 학습",
+    condition: "한 줄 정리",
+    kind: "weekly",
+    count: 2,
+    weeks: [1, 2, 4],
+  });
+  plan.goals[1].title = "자동화 적용";
+  Object.assign(plan.goals[1].tactics[0], {
+    title: "최종 적용",
+    condition: "실제 실행 증거",
+    kind: "once",
+    count: 1,
+    weeks: [8],
+  });
+  const cycle = await (
+    await request.post(`${base}/cycles`, {
+      headers,
+      data: {
+        title: "전체 기간을 보며 시간 배치",
+        startDate: "2026-10-19",
+        weekCount: 10,
+        plan,
+      },
+    })
+  ).json();
+  await page.addInitScript(
+    (token) => localStorage.setItem("twelve.token", token),
+    token,
+  );
+  await page.goto(`/#cycle=${cycle.id}&view=plan&tab=3`);
+  const timeline = page.getByRole("region", { name: "전체 기간 마일스톤" });
+  await expect(timeline).toBeVisible();
+  await expect(timeline.locator(".plan-timeline-week")).toHaveCount(10);
+  await expect(timeline.locator(".plan-timeline-week").first()).toContainText(
+    "10.19~10.25",
+  );
+  await expect(
+    timeline.getByRole("button", {
+      name: "단원 학습 · 1~2주차 · 주 2회 이상",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    timeline.getByRole("button", {
+      name: "단원 학습 · 4주차 · 주 2회 이상",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await timeline
+    .getByRole("button", { name: "8주차 약속 보기", exact: true })
+    .click();
+  const selected = timeline.getByRole("region", { name: "8주차 약속 요약" });
+  await expect(selected).toContainText("최소 1회");
+  await expect(selected).toContainText("최종 적용");
+  await expect(selected).not.toContainText("단원 학습");
+  const timetable = page.getByRole("region", {
+    name: "모범 주간 캘린더",
+    exact: true,
+  });
+  expect((await timeline.boundingBox()).y).toBeLessThan(
+    (await timetable.boundingBox()).y,
+  );
+  await timeline.screenshot({ path: "test-results/plan-timeline-desktop.png" });
+  const unchanged = await (
+    await request.get(`${base}/cycles/${cycle.id}`, { headers })
+  ).json();
+  expect(unchanged.plan).toEqual(cycle.plan);
+  expect(unchanged.version).toEqual(cycle.version);
+  await selected.getByRole("button", { name: "이 주 계획 상세 보기" }).click();
+  await expect(
+    page.getByRole("heading", { name: "8주차의 계획" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: /모범 주간/ }).click();
+  await timeline
+    .getByRole("button", { name: "학습을 공개로 연결하기 계획 수정" })
+    .click();
+  await expect(page.locator(".goal-plan-title")).toHaveText(
+    "학습을 공개로 연결하기",
+  );
+  await page.getByLabel("주당 횟수", { exact: true }).fill("3");
+  await page.getByRole("tab", { name: /모범 주간/ }).click();
+  await expect(
+    timeline.getByRole("button", {
+      name: "단원 학습 · 1~2주차 · 주 3회 이상",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await timeline
+    .getByRole("button", { name: "3주차 약속 보기", exact: true })
+    .click();
+  await expect(
+    timeline.getByRole("region", { name: "3주차 약속 요약" }),
+  ).toContainText("이 주에 배정된 전술이 없어요");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await timeline.screenshot({ path: "test-results/plan-timeline-mobile.png" });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    await timeline
+      .locator(".plan-timeline-scroll")
+      .evaluate((el) => el.scrollWidth > el.clientWidth),
+  ).toBe(true);
+  expect(
+    (
+      await (
+        await request.get(`${base}/cycles/${cycle.id}`, { headers })
+      ).json()
+    ).plan,
+  ).toEqual(cycle.plan);
+});
+
 test("weekly preview groups existing tactics, keeps scoring untouched and reflects unsaved edits", async ({
   page,
 }) => {
