@@ -1,0 +1,77 @@
+.life-attitude {
+  padding: 18px 22px;
+  margin-bottom: 24px;
+  border: 1px solid #dce5d3;
+  border-left: 3px solid #829e69;
+  border-radius: 10px;
+  background: #f3f6ed;
+  min-width: 0;
+}
+.life-attitude > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 12px;
+}
+.attitude-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #526e43;
+  font-size: 12px;
+  font-weight: 600;
+}
+.life-attitude > header button {
+  font-size: 11px;
+  padding: 4px 0;
+}
+.attitude-source {
+  font-size: 10px;
+  color: #7b8b6f;
+}
+.life-attitude .attitude-message {
+  border: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  background: transparent;
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.75;
+  color: #234b39;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.attitude-context {
+  margin-top: 12px;
+}
+.attitude-context summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #7b8b6f;
+}
+.attitude-context dl {
+  margin: 12px 0 0;
+}
+.attitude-context dt {
+  font-size: 11px;
+  color: #7b8b6f;
+  margin-top: 10px;
+}
+.attitude-context dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #64745a;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .life-attitude {
+    padding: 16px;
+  }
+  .life-attitude .attitude-message {
+    font-size: 15px;
+  }
+}

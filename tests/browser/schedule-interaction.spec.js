@@ -2123,6 +2123,186 @@ test("copying a tactic execution confirms and adds one occurrence only to this w
   expect(errors).toEqual([]);
 });
 
+test("authored life attitudes, weekly timetable fallback and overnight sleep share the exported week", async ({
+  page,
+  request,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  const { getWeek, getCycle } = await setup(
+    page,
+    request,
+    "삶의 태도와 주간 시간표 검증",
+    (plan) => {
+      plan.responsibilityActions.personal =
+        "시작할 수 있는 행동을 고른다\n잠들기 전 내 선택을 확인한다";
+      plan.responsibilityActions.business = "내 책임 범위를 분명히 한다";
+      plan.pastCommitments[0] = {
+        promise: "달리기를 시작한 약속",
+        action: "퇴근 후 신발을 신었다",
+        benefit: "시작하는 힘을 얻었다",
+      };
+      Object.assign(plan.commitments[0], {
+        promise: "건강을 지킨다",
+        action: "꾸준히 달리기",
+        cost: "퇴근 후 20분",
+        accepted: true,
+      });
+      Object.assign(plan.commitments[1], {
+        promise: "생각 중인 다른 약속",
+        action: "선택 전 행동",
+        accepted: false,
+      });
+      plan.modelWeek.push({
+        id: crypto.randomUUID(),
+        day: 6,
+        time: "03:00",
+        minutes: 360,
+        kind: "fixed",
+        title: "수면",
+      });
+      plan.weeklyModelWeeks = [
+        {
+          week: 1,
+          blocks: plan.modelWeek.map((block) =>
+            block.title === "맥날 근무"
+              ? { ...block, time: "17:00" }
+              : { ...block },
+          ),
+        },
+      ];
+    },
+  );
+  const initialWeek = await getWeek();
+  const attitude = page.getByLabel("나의 삶의 태도", { exact: true });
+  const messages = [
+    "시작할 수 있는 행동을 고른다",
+    "잠들기 전 내 선택을 확인한다",
+    "내 책임 범위를 분명히 한다",
+    "달리기를 시작한 약속",
+    "건강을 지킨다",
+  ];
+  const seen = new Set();
+  for (let i = 0; i < messages.length; i++) {
+    await expect(attitude.locator(".attitude-message")).toHaveCount(1);
+    const text = await attitude.locator(".attitude-message").innerText();
+    expect(messages).toContain(text);
+    expect(seen.has(text)).toBe(false);
+    seen.add(text);
+    await expect(attitude).not.toContainText("생각 중인 다른 약속");
+    if (text === "건강을 지킨다" || text === "달리기를 시작한 약속") {
+      const extra = attitude.getByText("함께 적어둔 내용", { exact: true });
+      await extra.click();
+      await expect(attitude).toContainText(
+        text === "건강을 지킨다" ? "퇴근 후 20분" : "시작하는 힘을 얻었다",
+      );
+    }
+    await attitude
+      .getByRole("button", { name: "다른 약속 보기", exact: true })
+      .click();
+  }
+  expect(seen.size).toBe(messages.length);
+  const stableMessage = await attitude.locator(".attitude-message").innerText();
+  await page.screenshot({
+    path: "test-results/43-one-reminder-desktop.png",
+    fullPage: true,
+  });
+  await page.locator(".day-strip button").first().click();
+  const wheel = page.getByRole("region", { name: "하루 원형 시간표" });
+  await expect(
+    wheel.getByRole("img", {
+      name: "수면 · 04:00부터 · 360분 주차별 시간표",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "이번 주 계획표", exact: true })
+    .click();
+  const plan = page.getByRole("region", {
+    name: "이번 주 계획표",
+    exact: true,
+  });
+  await expect(plan).toContainText("1주차에 따로 저장한 시간표를 사용 중");
+  await expect(attitude.locator(".attitude-message")).toHaveText(stableMessage);
+  const table = plan.getByRole("region", {
+    name: "모범 주간 캘린더",
+    exact: true,
+  });
+  await expect(
+    table.getByRole("button", {
+      name: "맥날 근무 · 월요일 17:00 · 360분",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await plan
+    .getByRole("button", { name: "학습 결과 정리 1회차 배치", exact: true })
+    .click();
+  await page.getByLabel("평가 날짜").fill("2026-10-07");
+  await page.getByLabel("시작 시각", { exact: true }).fill("11:00");
+  await page.getByRole("button", { name: "일정 저장", exact: true }).click();
+  await expect(plan).toContainText("10.07 11:00 · 60분");
+  const exported = async () => {
+    const downloading = page.waitForEvent("download");
+    await plan
+      .getByRole("button", { name: "Apple 캘린더로 내보내기", exact: true })
+      .click();
+    const download = await downloading;
+    return new ICAL.Component(
+      ICAL.parse(await readFile(await download.path(), "utf8")),
+    ).getAllSubcomponents("vevent");
+  };
+  const first = await exported();
+  const shift = first.find(
+    (event) => event.getFirstPropertyValue("summary") === "맥날 근무",
+  );
+  expect(shift.getFirstPropertyValue("dtstart").toJSDate().toISOString()).toBe(
+    "2026-10-05T08:00:00.000Z",
+  );
+  expect(
+    first.some(
+      (event) => event.getFirstPropertyValue("summary") === "학습 결과 정리",
+    ),
+  ).toBe(true);
+  expect(
+    first.filter((event) => event.getFirstPropertyValue("summary") === "수면"),
+  ).toHaveLength(2);
+  await plan.screenshot({ path: "test-results/41-weekly-timetable.png" });
+  await page.getByLabel("주차 선택").selectOption("2");
+  await expect(plan).toContainText(
+    "별도 시간표가 없어 기본 모범 주간을 사용 중",
+  );
+  const second = await exported();
+  expect(
+    second
+      .find((event) => event.getFirstPropertyValue("summary") === "맥날 근무")
+      .getFirstPropertyValue("dtstart")
+      .toJSDate()
+      .toISOString(),
+  ).toBe("2026-10-12T10:00:00.000Z");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await attitude.screenshot({
+    path: "test-results/42-life-attitude-mobile.png",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.reload();
+
+  await expect(attitude.locator(".attitude-message")).toHaveCount(1);
+  expect(messages).toContain(
+    await attitude.locator(".attitude-message").innerText(),
+  );
+  expect((await getCycle()).plan.weeklyModelWeeks).toHaveLength(1);
+  expect((await getWeek()).state.occurrences).toHaveLength(
+    initialWeek.state.occurrences.length,
+  );
+  expect((await getWeek()).score).toEqual(initialWeek.score);
+  expect(errors).toEqual([]);
+});
+
 test("choose a goal, see one row per tactic, move daily or placed work, and add scored tactics without losing old promises", async ({
   page,
   request,

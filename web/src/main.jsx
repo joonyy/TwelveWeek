@@ -69,7 +69,7 @@ import {
 } from "./PlanningWidgets.jsx";
 import DaySchedule from "./DaySchedule.jsx";
 import CurrentWeekPlan from "./CurrentWeekPlan.jsx";
-
+import LifeAttitude from "./LifeAttitude.jsx";
 import ExecutionPicker from "./ExecutionPicker.jsx";
 import QuickTacticForm from "./QuickTacticForm.jsx";
 import { FocusTimerProvider } from "./FocusTimer.jsx";
@@ -2606,6 +2606,9 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
               주간 평가 · 30분
             </button>
           </div>
+          {(!modelEdit || mode === "plan") && (
+            <LifeAttitude plan={cycle.plan} />
+          )}
 
           {mode === "plan" && (
             <CurrentWeekPlan
