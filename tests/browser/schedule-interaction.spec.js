@@ -1034,6 +1034,188 @@ test("mobile touch handles adjust execution edges without scrolling the calendar
   await cdp.detach();
 });
 
+test("daily ring shows details, draws time, sounds focus and rest alarms, and waits for manual starts", async ({
+  page,
+  request,
+}) => {
+  await page.addInitScript(() => {
+    const NativeAudio = window.AudioContext;
+    window.__timerAudio = { starts: 0, contexts: [] };
+    window.AudioContext = class extends NativeAudio {
+      constructor(...args) {
+        super(...args);
+        window.__timerAudio.contexts.push(this);
+      }
+      createOscillator() {
+        const oscillator = super.createOscillator();
+        const start = oscillator.start.bind(oscillator);
+        oscillator.start = (...args) => {
+          window.__timerAudio.starts++;
+          return start(...args);
+        };
+        return oscillator;
+      }
+    };
+  });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { getWeek } = await setup(page, request, "원형 드래그와 타이머 검증");
+  const wheel = page.getByRole("region", { name: "하루 원형 시간표" });
+  const reference = wheel.getByRole("img", {
+    name: "모범 집중 블록 · 09:00 · 120분 모범 주간",
+    exact: true,
+  });
+  await reference.hover();
+  await expect(wheel.getByRole("tooltip", { name: "일정 상세" })).toContainText(
+    "모범 집중 블록",
+  );
+  await expect(wheel.getByRole("tooltip")).toContainText("09:00–11:00");
+  const svg = wheel.locator("svg.daily-clock");
+  await svg.scrollIntoViewIfNeeded();
+  const box = await svg.boundingBox();
+  const point = (minutes) => {
+    const angle = (minutes / 1440) * Math.PI * 2 - Math.PI / 2;
+    return {
+      x: box.x + (box.width * (200 + 123 * Math.cos(angle))) / 400,
+      y: box.y + (box.height * (200 + 123 * Math.sin(angle))) / 400,
+    };
+  };
+  const from = point(495),
+    to = point(600);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await expect(
+    wheel.getByRole("status", { name: "선택한 시간" }),
+  ).toContainText("12:00–14:00 · 120분");
+  await page.mouse.up();
+  await page
+    .getByRole("dialog", { name: "이 시간에 실행 배치" })
+    .getByRole("button", { name: /학습 결과 정리.*1회차/ })
+    .click();
+  await expect(
+    wheel.getByRole("button", {
+      name: "학습 결과 정리 · 12:00 · 120분 일정 선택",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect((await getWeek()).state.occurrences).toHaveLength(10);
+  const clock = wheel.getByLabel("현재 한국 시간");
+  await page.clock.setFixedTime(new Date("2026-10-07T12:00:02+09:00"));
+  await expect(clock.locator("time")).toHaveText("12:00:02");
+  const timer = wheel.getByRole("region", { name: "집중 타이머" });
+  const rendered = await page.evaluate(async () => {
+    const { playTimerChime } = await import("/src/timer-alarm.js");
+    const context = new OfflineAudioContext(1, 44100, 44100);
+    playTimerChime(context);
+    const buffer = (await context.startRendering()).getChannelData(0);
+    return [0.04, 0.28, 0.52, 0.9].map((second) => {
+      const samples = buffer.slice(
+        Math.floor(second * 44100),
+        Math.floor((second + 0.02) * 44100),
+      );
+      return (
+        samples.reduce((sum, sample) => sum + sample * sample, 0) /
+        samples.length
+      );
+    });
+  });
+  expect(rendered.slice(0, 3).every((energy) => energy > 0.00001)).toBe(true);
+  expect(rendered[3]).toBe(0);
+  await timer
+    .getByRole("button", { name: "알람 소리 확인", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => window.__timerAudio.starts))
+    .toBeGreaterThanOrEqual(3);
+  await timer.getByRole("button", { name: "시작", exact: true }).click();
+  await page.getByRole("button", { name: "주간 일정", exact: true }).click();
+  await page.clock.setFixedTime(new Date("2026-10-07T12:25:03+09:00"));
+  await expect
+    .poll(() => page.evaluate(() => window.__timerAudio.starts))
+    .toBeGreaterThanOrEqual(6);
+  await expect(
+    page.getByRole("alert", { name: "타이머 완료 알림" }),
+  ).toContainText("집중 시간이 끝났어요.");
+  await page
+    .getByRole("button", { name: "일간 실행 · 10분", exact: true })
+    .click();
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await expect(timer.getByRole("status")).toHaveText(
+    "집중 완료 · 다음 시작 대기",
+  );
+  await expect(
+    timer.getByRole("button", { name: "집중 25분", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.clock.setFixedTime(new Date("2026-10-07T13:25:03+09:00"));
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await timer.getByRole("button", { name: "알람 끄기", exact: true }).click();
+  const silenced = await page.evaluate(() => window.__timerAudio.starts);
+  await page.waitForTimeout(4200);
+  expect(await page.evaluate(() => window.__timerAudio.starts)).toBe(silenced);
+  await timer
+    .getByRole("button", { name: "짧은 휴식 5분 시작", exact: true })
+    .click();
+  await expect(timer.getByRole("timer")).toHaveText("05:00");
+  await page.clock.setFixedTime(new Date("2026-10-07T13:30:04+09:00"));
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await expect(timer.getByRole("status")).toHaveText(
+    "짧은 휴식 완료 · 다음 시작 대기",
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__timerAudio.starts))
+    .toBeGreaterThan(silenced);
+  await timer
+    .getByRole("button", { name: "집중 25분 시작", exact: true })
+    .click();
+  await page.clock.setFixedTime(new Date("2026-10-07T13:30:05+09:00"));
+  await expect(timer.getByRole("timer")).toHaveText("24:59");
+  await page.reload();
+
+  await expect(timer.getByRole("timer")).toHaveText("24:59");
+  await timer.getByRole("button", { name: "일시정지", exact: true }).click();
+  await page.clock.setFixedTime(new Date("2026-10-07T14:30:05+09:00"));
+  await expect(timer.getByRole("timer")).toHaveText("24:59");
+  await timer.getByRole("button", { name: "초기화", exact: true }).click();
+  await expect(timer.getByRole("timer")).toHaveText("25:00");
+  await timer
+    .getByRole("button", { name: "긴 휴식 10분", exact: true })
+    .click();
+  await timer.getByRole("button", { name: "시작", exact: true }).click();
+  await page.clock.setFixedTime(new Date("2026-10-07T14:40:06+09:00"));
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await expect(timer.getByRole("status")).toHaveText(
+    "긴 휴식 완료 · 다음 시작 대기",
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__timerAudio.starts))
+    .toBeGreaterThanOrEqual(3);
+  await timer.getByRole("button", { name: "알람 끄기", exact: true }).click();
+  await page.reload();
+
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await expect(
+    timer.getByRole("button", { name: "알람 꺼짐", exact: true }),
+  ).toBeDisabled();
+  await reference.focus();
+  await wheel.screenshot({
+    path: "test-results/36-day-clock-timer-desktop.png",
+  });
+  await expect(wheel.getByRole("tooltip", { name: "일정 상세" })).toContainText(
+    "모범 집중 블록",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await wheel.screenshot({
+    path: "test-results/37-day-clock-timer-mobile.png",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test("choose work, strategy, buffer and rest blocks before drawing and retain their types", async ({
   page,
   request,
@@ -2163,4 +2345,65 @@ test("choose a goal, see one row per tactic, move daily or placed work, and add 
     }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("an expired legacy timer restores its finished phase and offers sound activation when playback is blocked", async ({
+  page,
+  request,
+}) => {
+  const fixture = await setup(page, request, "기존 타이머 완료 복원 검증");
+  const cycle = await fixture.getCycle();
+  await page.addInitScript(() => {
+    const NativeAudio = window.AudioContext;
+    window.AudioContext = class extends NativeAudio {
+      constructor(...args) {
+        super(...args);
+        void this.suspend();
+      }
+      resume() {
+        return Promise.reject(
+          new DOMException("Playback blocked", "NotAllowedError"),
+        );
+      }
+    };
+  });
+  await page.evaluate(
+    (id) =>
+      localStorage.setItem(
+        `twelve.focusTimer.${id}`,
+        JSON.stringify({
+          phase: "short",
+          running: true,
+          remainingMs: 300000,
+          endAt: Date.now() - 1000,
+        }),
+      ),
+    cycle.id,
+  );
+  await page.reload();
+
+  const timer = page.getByRole("region", { name: "집중 타이머" });
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await expect(timer.getByRole("status")).toHaveText(
+    "짧은 휴식 완료 · 다음 시작 대기",
+  );
+  await expect(
+    timer.getByRole("button", { name: "알람 소리 켜기", exact: true }),
+  ).toBeVisible();
+  await timer
+    .getByRole("button", { name: "알람 소리 켜기", exact: true })
+    .click();
+  await expect(timer.getByRole("timer")).toHaveText("00:00");
+  await timer.getByRole("button", { name: "알람 끄기", exact: true }).click();
+  const saved = await page.evaluate(
+    (id) => JSON.parse(localStorage.getItem(`twelve.focusTimer.${id}`)),
+    cycle.id,
+  );
+  expect(saved).toMatchObject({
+    phase: "short",
+    running: false,
+    remainingMs: 0,
+    alarmSilenced: true,
+  });
+  expect(saved.finishedAt).toBeGreaterThan(0);
 });

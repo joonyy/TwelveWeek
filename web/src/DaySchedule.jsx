@@ -8,7 +8,7 @@ import {
   resizeCalendarBlock,
 } from "../../shared/planning.js";
 import { evaluationDate } from "../../shared/domain.js";
-
+import FocusTimer from "./FocusTimer.jsx";
 import "./day-schedule.css";
 
 const colorKey = (block) =>
@@ -751,7 +751,7 @@ export default function DaySchedule({
               </p>
             )}
           </div>
-
+          <FocusTimer />
           <div className="daily-clock-legend">
             <span className="reference">{referenceLabel}</span>
             <span className="actual">실제 실행</span>

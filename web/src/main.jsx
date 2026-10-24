@@ -72,7 +72,7 @@ import CurrentWeekPlan from "./CurrentWeekPlan.jsx";
 
 import ExecutionPicker from "./ExecutionPicker.jsx";
 import QuickTacticForm from "./QuickTacticForm.jsx";
-
+import { FocusTimerProvider } from "./FocusTimer.jsx";
 import "./style.css";
 import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
 import WritingGuide from "./WritingGuide.jsx";
@@ -1882,7 +1882,14 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
   );
 }
 
-function Execution({ cycle, setCycle, run, busy, notify, onDirty }) {
+function Execution(props) {
+  return (
+    <FocusTimerProvider key={props.cycle.id} storageKey={props.cycle.id}>
+      <ExecutionContent {...props} />
+    </FocusTimerProvider>
+  );
+}
+function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
   const [initialNavigation] = useState(() => readNavigation(cycle.id));
   const weekCount = cycleWeeks(cycle),
     reviewNumber = weekCount + 1;
