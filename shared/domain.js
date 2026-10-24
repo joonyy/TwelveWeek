@@ -97,22 +97,40 @@ export function prepareWeek(plan, start, number, previous) {
       const id = `${t.id}~${i}`;
       const old = previous?.occurrences.find((o) => o.id === id);
       const requiredDate = t.kind === "daily" ? addDays(date, i) : null;
+      const saved = plan.weeklySchedules
+        ?.find((w) => w.week === number)
+        ?.placements.find((p) => p.occurrenceId === id);
+      const validSaved =
+        saved &&
+        saved.date >= date &&
+        saved.date <= addDays(date, 6) &&
+        (!requiredDate || saved.date === requiredDate)
+          ? saved
+          : null;
+      const scheduled = old ?? validSaved;
       return {
         id,
         tacticId: t.id,
         requiredDate,
-        date: requiredDate ?? old?.date ?? null,
-        time: old?.time ?? "09:00",
-        minutes: old?.minutes ?? 60,
+        date: requiredDate ?? scheduled?.date ?? null,
+        time: scheduled?.time ?? "09:00",
+        minutes: scheduled?.minutes ?? 60,
+        ...(scheduled?.timePlaced === false ? { timePlaced: false } : {}),
+        ...(scheduled?.calendarLink
+          ? { calendarLink: scheduled.calendarLink }
+          : {}),
+
         completed: false,
         executedAt: null,
       };
     }),
   );
+
   return {
     goals,
     tactics,
     occurrences,
+
     review: previous?.review
       ? {
           ...previous.review,
@@ -172,6 +190,18 @@ export function scoreDay(state, date) {
     done,
     score: planned.length ? (done / planned.length) * 100 : null,
   };
+}
+// A date is an evaluation promise; removing a clock block does not remove it.
+export function hasScheduledTime(occurrence) {
+  return !!occurrence.date && occurrence.timePlaced !== false;
+}
+export function occurrenceLabel(occurrence, occurrences) {
+  const peers = occurrences.filter(
+    (o) =>
+      o.tacticId === occurrence.tacticId && !!o.extra === !!occurrence.extra,
+  );
+  const number = peers.findIndex((o) => o.id === occurrence.id) + 1;
+  return occurrence.extra ? `추가 실행 ${number}` : `${number}회차`;
 }
 export const percentage = (value) =>
   value == null ? "평가 없음" : `${Number(value.toFixed(1))}%`;

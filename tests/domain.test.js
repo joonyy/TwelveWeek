@@ -9,6 +9,7 @@ import {
   prepareWeek,
   scoreWeek,
   scoreDay,
+  hasScheduledTime,
 } from "../shared/domain.js";
 import { calendar } from "../server/calendar.js";
 const plan = () => ({
@@ -40,6 +41,23 @@ const plan = () => ({
       ],
     },
   ],
+});
+test("removing a clock placement retains daily and weekly scoring and survives future regeneration", () => {
+  const p = plan(),
+    state = prepareWeek(p, "2026-10-05", 1);
+  const o = state.occurrences[0];
+  o.date = "2026-10-07";
+  const day = scoreDay(state, o.date),
+    week = scoreWeek(state);
+  assert.equal(hasScheduledTime(o), true);
+  o.timePlaced = false;
+  assert.equal(hasScheduledTime(o), false);
+  assert.deepEqual(scoreDay(state, o.date), day);
+  assert.deepEqual(scoreWeek(state), week);
+  const rebuilt = prepareWeek(p, "2026-10-05", 1, state);
+  assert.deepEqual(rebuilt.occurrences[0], o);
+  delete o.timePlaced;
+  assert.equal(hasScheduledTime(o), true);
 });
 test("04:00 KST is the exact evaluation boundary, including Monday", () => {
   assert.equal(evaluationDate("2026-10-05T03:59:59+09:00"), "2026-10-04");

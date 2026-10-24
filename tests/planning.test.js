@@ -9,8 +9,102 @@ import {
   calendarFragments,
   calendarLanes,
   planWithinWeeks,
+  resizeCalendarBlock,
+  modelWeekFor,
+  withWeekModel,
 } from "../shared/planning.js";
 import { planSchema } from "../server/schema.js";
+
+test("weekly shift changes survive schema storage and shortening without changing execution plans or scores", () => {
+  const plan = emptyPlan(3);
+  plan.goals[0].title = "주간 실행";
+  plan.goals[0].tactics[0].title = "실행";
+  const block = {
+    id: crypto.randomUUID(),
+    day: 0,
+    time: "19:00",
+    minutes: 360,
+    kind: "fixed",
+    title: "맥날 근무",
+  };
+  plan.modelWeek = [block];
+  const before = structuredClone(plan),
+    state = prepareWeek(plan, "2026-10-05", 1);
+  const changed = withWeekModel(plan, 1, [
+    { ...block, time: "17:00", minutes: 480 },
+  ]);
+  assert.equal(modelWeekFor(changed, 1)[0].time, "17:00");
+  assert.equal(modelWeekFor(changed, 2)[0].time, "19:00");
+  assert.deepEqual(planSchema.parse(changed), changed);
+  assert.deepEqual(prepareWeek(changed, "2026-10-05", 1), state);
+  assert.deepEqual(plan, before);
+  assert.deepEqual(
+    planWithinWeeks(withWeekModel(changed, 3, []), 2).weeklyModelWeeks.map(
+      (w) => w.week,
+    ),
+    [1],
+  );
+});
+test("changing the default protects started weeks and overrides, and explicit reset follows the default again", () => {
+  const plan = emptyPlan(4);
+  const block = {
+    id: crypto.randomUUID(),
+    day: 0,
+    time: "19:00",
+    minutes: 360,
+    kind: "fixed",
+    title: "맥날 근무",
+  };
+  plan.modelWeek = [block];
+  const first = withWeekModel(plan, 3, [{ ...block, time: "15:00" }]);
+  const changed = withWeekModel(first, 2, [{ ...block, time: "17:00" }], {
+    applyToDefault: true,
+    preserveWeeks: [1],
+  });
+  assert.equal(modelWeekFor(changed, 1)[0].time, "19:00");
+  assert.equal(modelWeekFor(changed, 2)[0].time, "17:00");
+  assert.equal(modelWeekFor(changed, 3)[0].time, "15:00");
+  assert.equal(modelWeekFor(changed, 4)[0].time, "17:00");
+  assert.equal(
+    modelWeekFor(withWeekModel(changed, 3, [], { reset: true }), 3)[0].time,
+    "17:00",
+  );
+  const duplicate = {
+    ...changed,
+    weeklyModelWeeks: [
+      ...changed.weeklyModelWeeks,
+      changed.weeklyModelWeeks[0],
+    ],
+  };
+  assert.equal(planSchema.safeParse(duplicate).success, false);
+});
+test("calendar resizing preserves the other edge, bounds duration and respects the 04:00 week boundary", () => {
+  const block = { day: 2, time: "09:00", minutes: 60 };
+  assert.deepEqual(resizeCalendarBlock(block, "end", 60), {
+    time: "09:00",
+    minutes: 120,
+  });
+  assert.deepEqual(resizeCalendarBlock(block, "start", -30), {
+    time: "08:30",
+    minutes: 90,
+  });
+  assert.equal(resizeCalendarBlock(block, "end", 2000).minutes, 720);
+  assert.equal(resizeCalendarBlock(block, "start", 2000).minutes, 5);
+  assert.deepEqual(
+    resizeCalendarBlock({ day: 2, time: "04:00", minutes: 60 }, "start", -60),
+    { time: "04:00", minutes: 60 },
+  );
+  const overnight = { day: 2, time: "03:00", minutes: 120 };
+  assert.deepEqual(resizeCalendarBlock(overnight, "start", -30), {
+    time: "02:30",
+    minutes: 150,
+  });
+  assert.deepEqual(
+    resizeCalendarBlock({ ...overnight, day: 6 }, "end", 60, { wrap: false }),
+    { time: "03:00", minutes: 60 },
+  );
+  assert.deepEqual(block, { day: 2, time: "09:00", minutes: 60 });
+});
 test("shorter draft keeps content and IDs, limits starter and selected execution weeks", () => {
   const p = emptyPlan(11);
   assert.equal(p.goals.length, 3);

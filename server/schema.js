@@ -10,10 +10,11 @@ export const dateSchema = z.string().refine((v) => {
     return false;
   }
 }, "날짜를 확인해주세요.");
-const tactic = z.object({
+export const tacticSchema = z.object({
   id,
   title: text,
   condition: text,
+
   kind: z.enum(["weekly", "daily", "once"]),
   count: z.number().int().min(1).max(50),
   weeks: z
@@ -29,6 +30,7 @@ const goal = z.object({
   leading: text,
   lagging: text,
   measurement: text,
+
   visionLinks: z
     .array(z.object({ area: visionArea, itemId: id, text }))
     .max(6001)
@@ -39,7 +41,7 @@ const goal = z.object({
       "같은 비전 항목을 중복 연결할 수 없습니다.",
     )
     .optional(),
-  tactics: z.array(tactic).max(50),
+  tactics: z.array(tacticSchema).max(50),
   difficulties: z
     .array(
       z.object({
@@ -51,6 +53,22 @@ const goal = z.object({
     )
     .max(50),
 });
+const modelWeekBlocks = z
+  .array(
+    z.object({
+      id,
+      day: z.number().int().min(0).max(6),
+      time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      minutes: z.number().int().min(5).max(720),
+      kind: z.enum(["strategy", "buffer", "breakout", "fixed"]),
+      title: text,
+    }),
+  )
+  .max(100)
+  .refine(
+    (items) => new Set(items.map((b) => b.id)).size === items.length,
+    "시간 블록 ID는 중복될 수 없습니다.",
+  );
 export const planSchema = z
   .object({
     longVision: text,
@@ -70,18 +88,55 @@ export const planSchema = z
       })
       .optional(),
     goals: z.array(goal).max(50),
-    modelWeek: z
+    modelWeek: modelWeekBlocks,
+    weeklyModelWeeks: z
       .array(
         z.object({
-          id,
-          day: z.number().int().min(0).max(6),
-          time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-          minutes: z.number().int().min(5).max(720),
-          kind: z.enum(["strategy", "buffer", "breakout"]),
-          title: text,
+          week: z.number().int().min(1).max(12),
+          blocks: modelWeekBlocks,
         }),
       )
-      .max(100),
+      .max(12)
+      .refine(
+        (items) => new Set(items.map((w) => w.week)).size === items.length,
+        "주차별 모범 주간은 중복될 수 없습니다.",
+      )
+      .optional(),
+    modelWeekNotes: text.optional(),
+    weeklySchedules: z
+      .array(
+        z.object({
+          week: z.number().int().min(1).max(12),
+          placements: z
+            .array(
+              z.object({
+                occurrenceId: z.string().min(1).max(100),
+                date: dateSchema,
+                time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                minutes: z.number().int().min(5).max(720),
+                calendarLink: z
+                  .object({
+                    calendarId: z.string().max(100),
+                    eventId: z.string().max(200),
+                    title: text,
+                  })
+                  .optional(),
+              }),
+            )
+            .max(600)
+            .refine(
+              (items) =>
+                new Set(items.map((p) => p.occurrenceId)).size === items.length,
+              "같은 실행 항목의 배치는 중복될 수 없습니다.",
+            ),
+        }),
+      )
+      .max(12)
+      .refine(
+        (items) => new Set(items.map((w) => w.week)).size === items.length,
+        "같은 주차의 배치는 중복될 수 없습니다.",
+      )
+      .optional(),
     responsibility: text,
     responsibilityActions: z
       .object({ personal: text, business: text })
@@ -143,12 +198,14 @@ export const scheduleInput = z.object({
   date: dateSchema.nullable(),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   minutes: z.number().int().min(5).max(720),
+  timePlaced: z.boolean().optional(),
 });
 export const completeInput = z.object({
   version: z.number().int().min(0),
   completed: z.boolean(),
   executedAt: z.iso.datetime({ offset: true }).optional(),
 });
+
 export const reviewInput = z.object({
   version: z.number().int().min(0),
   learned: text,

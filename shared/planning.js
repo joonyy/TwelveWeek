@@ -97,6 +97,13 @@ export function editablePlan(plan, { draft = true, weekCount = 12 } = {}) {
 export function planWithinWeeks(plan, weekCount) {
   return {
     ...plan,
+    ...(plan.weeklyModelWeeks
+      ? {
+          weeklyModelWeeks: plan.weeklyModelWeeks.filter(
+            (w) => w.week <= weekCount,
+          ),
+        }
+      : {}),
     goals: plan.goals.map((g) => ({
       ...g,
       tactics: g.tactics.map((t) => ({
@@ -110,9 +117,71 @@ export function calendarOffset(time) {
   const [h, m] = time.split(":").map(Number);
   return (h * 60 + m - 240 + 1440) % 1440;
 }
+export const modelWeekFor = (plan, week) =>
+  plan.weeklyModelWeeks?.find((w) => w.week === week)?.blocks ?? plan.modelWeek;
+// Keep the previous Sunday's overnight block when it continues past Monday 04:00.
+// day -1 is a display/export reference only, never a stored execution or model block.
+export function timetableForWeek(plan, week) {
+  const previous = modelWeekFor(plan, week - 1);
+  return [
+    ...previous
+      .filter(
+        (block) =>
+          block.day === 6 && calendarOffset(block.time) + block.minutes > 1440,
+      )
+      .map((block) => ({ ...block, day: -1, sourceWeek: week - 1 })),
+    ...modelWeekFor(plan, week).map((block) => ({
+      ...block,
+      sourceWeek: week,
+    })),
+  ];
+}
+export function withWeekModel(
+  plan,
+  week,
+  blocks,
+  { applyToDefault = false, preserveWeeks = [], reset = false } = {},
+) {
+  const weeks = new Map(
+    (plan.weeklyModelWeeks ?? []).map((w) => [w.week, structuredClone(w)]),
+  );
+  if (applyToDefault)
+    for (const number of preserveWeeks)
+      if (!weeks.has(number))
+        weeks.set(number, {
+          week: number,
+          blocks: structuredClone(plan.modelWeek),
+        });
+  if (reset) weeks.delete(week);
+  else weeks.set(week, { week, blocks: structuredClone(blocks) });
+  return {
+    ...plan,
+    ...(applyToDefault ? { modelWeek: structuredClone(blocks) } : {}),
+    weeklyModelWeeks: [...weeks.values()].sort((a, b) => a.week - b.week),
+  };
+}
 export function timeAtOffset(offset) {
   const minutes = (offset + 240) % 1440;
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+// Keep the opposite edge fixed; a resize never changes the evaluation day.
+export function resizeCalendarBlock(block, edge, delta, { wrap = true } = {}) {
+  const start = calendarOffset(block.time),
+    end = start + block.minutes;
+  if (edge === "start") {
+    const next = Math.max(
+      Math.max(0, end - 720),
+      Math.min(end - 5, 1439, start + delta),
+    );
+    return { time: timeAtOffset(next), minutes: end - next };
+  }
+  const limit = !wrap && block.day === 6 ? 1440 : Infinity;
+  if (start + 5 > limit) return { time: block.time, minutes: block.minutes };
+  return {
+    time: block.time,
+    minutes:
+      Math.max(start + 5, Math.min(start + 720, limit, end + delta)) - start,
+  };
 }
 // The reusable model week wraps Sunday into Monday, including blocks across 04:00.
 export function calendarFragments(blocks, { wrap = true } = {}) {

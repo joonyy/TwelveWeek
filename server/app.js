@@ -11,6 +11,7 @@ import {
   completeInput,
   reviewInput,
 } from "./schema.js";
+
 import {
   emptyPlan,
   prepareWeek,
@@ -25,6 +26,7 @@ import {
 import { calendar } from "./calendar.js";
 import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
+
 import {
   hasGoalContent,
   hasTacticContent,
@@ -192,6 +194,7 @@ export function createApp({
     rateLimits,
     env: aiEnv,
   });
+
   app.get("/api/cycles", async (req, res) =>
     res.json(
       (
@@ -232,6 +235,7 @@ export function createApp({
   app.get("/api/cycles/:cycleId", async (req, res) =>
     res.json(await owned(pool, req)),
   );
+
   app.put("/api/cycles/:cycleId", async (req, res) => {
     const input = cycleInput.parse(req.body);
     if (new Date(`${input.startDate}T00:00:00Z`).getUTCDay() !== 1)
@@ -444,6 +448,7 @@ export function createApp({
     const { cycle, week } = await getWeek(pool, req);
     res.json(present(cycle, week));
   });
+
   async function mutateWeek(req, kind, input, change) {
     return transaction(pool, async (db) => {
       const { cycle, week } = await getWeek(db, req, true);
@@ -490,6 +495,13 @@ export function createApp({
             );
           if (o.requiredDate && input.date !== o.requiredDate)
             fail(409, "매일 해야 하는 실행은 다른 날짜로 옮길 수 없어요.");
+          if (input.timePlaced === false && !input.date)
+            fail(409, "시간 배치를 해제해도 평가 날짜는 남겨주세요.");
+          if (
+            input.timePlaced === false &&
+            addDays(start, 6) < evaluationDate(now())
+          )
+            fail(409, "지난주의 시간 배치는 해제할 수 없어요.");
           if (
             input.date &&
             (input.date < start || input.date > addDays(start, 6))
@@ -506,11 +518,20 @@ export function createApp({
               409,
               "이번 주 항목을 일정에서 빼는 대신 같은 주의 실행 날짜를 선택해주세요.",
             );
+          if (
+            o.date !== input.date ||
+            o.time !== input.time ||
+            o.minutes !== input.minutes ||
+            input.timePlaced === false
+          )
+            delete o.calendarLink;
           Object.assign(o, {
             date: input.date,
             time: input.time,
             minutes: input.minutes,
           });
+          if (input.timePlaced === false) o.timePlaced = false;
+          else delete o.timePlaced;
         },
       );
       res.json(result);
@@ -547,6 +568,7 @@ export function createApp({
       res.json(result);
     },
   );
+
   app.put("/api/cycles/:cycleId/weeks/:week/review", async (req, res) => {
     const input = reviewInput.parse(req.body);
     const result = await mutateWeek(req, "review.saved", input, (state) => {
