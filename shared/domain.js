@@ -123,7 +123,9 @@ export function prepareWeek(plan, start, number, previous) {
         ...(scheduled?.calendarLink
           ? { calendarLink: scheduled.calendarLink }
           : {}),
-
+        ...(scheduled?.readingRecord
+          ? { readingRecord: structuredClone(scheduled.readingRecord) }
+          : {}),
         completed: false,
         executedAt: null,
       };

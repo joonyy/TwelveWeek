@@ -10,6 +10,7 @@ import {
   summarizeExecutions,
 } from "../../shared/execution-status.js";
 import "./current-week-plan.css";
+import GoalReferenceLink from "./GoalReferenceLink.jsx";
 
 function scheduledLabel(occurrence, today) {
   if (+occurrence.time.slice(0, 2) < 4) {
@@ -35,6 +36,7 @@ export default function CurrentWeekPlan({
   editingTimetable,
   onExport,
   exportDisabled,
+  referenceGoals = [],
 }) {
   const [showAllActions, setShowAllActions] = useState(false);
   const detailsRef = useRef(null);
@@ -269,7 +271,11 @@ export default function CurrentWeekPlan({
             aria-label={g.title}
           >
             <h3>{g.title}</h3>
-
+            <GoalReferenceLink
+              url={
+                referenceGoals.find((goal) => goal.id === g.id)?.referenceUrl
+              }
+            />
             {tactics
               .filter((t) => t.goalId === g.id)
               .map((t) => {

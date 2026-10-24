@@ -14,7 +14,7 @@ export const tacticSchema = z.object({
   id,
   title: text,
   condition: text,
-
+  readingBook: z.string().trim().max(300).optional(),
   kind: z.enum(["weekly", "daily", "once"]),
   count: z.number().int().min(1).max(50),
   weeks: z
@@ -30,7 +30,19 @@ const goal = z.object({
   leading: text,
   lagging: text,
   measurement: text,
-
+  referenceUrl: z
+    .string()
+    .trim()
+    .max(2000)
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        return ["https:", "http:"].includes(new URL(value).protocol);
+      } catch {
+        return false;
+      }
+    }, "http 또는 https 기획서 링크를 입력해주세요.")
+    .optional(),
   visionLinks: z
     .array(z.object({ area: visionArea, itemId: id, text }))
     .max(6001)
@@ -204,8 +216,19 @@ export const completeInput = z.object({
   version: z.number().int().min(0),
   completed: z.boolean(),
   executedAt: z.iso.datetime({ offset: true }).optional(),
+  readingRecord: z
+    .object({
+      book: z.string().trim().min(1).max(300),
+      chapter: z.string().trim().min(1).max(300),
+      thought: z.string().trim().min(1).max(2000),
+    })
+    .optional(),
 });
-
+export const readingRecordSchema = completeInput.shape.readingRecord.unwrap();
+export const readingInput = z.object({
+  version: z.number().int().min(0),
+  record: readingRecordSchema.nullable(),
+});
 export const reviewInput = z.object({
   version: z.number().int().min(0),
   learned: text,

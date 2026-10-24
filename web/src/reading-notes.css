@@ -1,0 +1,86 @@
+.reading-notebook {
+  margin: 20px 0;
+  padding: 16px 20px;
+  background: #fbfcf8;
+  border: 1px solid #dce5d3;
+  border-radius: 10px;
+}
+.reading-notebook > summary {
+  cursor: pointer;
+  color: #41603c;
+  font-size: 14px;
+}
+.reading-notebook > summary svg {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.reading-notebook[open] > summary {
+  margin-bottom: 16px;
+}
+.reading-notebook section {
+  margin-top: 20px;
+}
+.reading-notebook h3 {
+  font-size: 16px;
+  color: #36563d;
+}
+.reading-notebook article {
+  border-top: 1px solid #e4ebdd;
+  padding: 12px 0;
+  font-size: 13px;
+}
+.reading-notebook article small {
+  display: block;
+  margin-top: 5px;
+  color: #829477;
+}
+.reading-notebook article p,
+.reading-record-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #526e43;
+  line-height: 1.8;
+}
+.reading-record-preview {
+  padding: 8px 12px;
+  border-left: 3px solid #b4c99c;
+  background: #f4f7ee;
+  font-size: 12px;
+  margin: 10px 0;
+}
+.reading-delete {
+  margin-left: 12px;
+}
+.goal-reference {
+  margin: 14px 0 22px;
+  font-size: 12px;
+}
+.goal-reference > summary {
+  cursor: pointer;
+  color: #77856d;
+}
+.goal-reference[open] > summary {
+  margin-bottom: 12px;
+}
+.goal-reference-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #526e43;
+  font-size: 12px;
+  margin: 10px 0;
+}
+.reading-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+@media (max-width: 650px) {
+  .reading-notebook {
+    padding: 14px;
+  }
+  .reading-notebook .button {
+    white-space: normal;
+  }
+}

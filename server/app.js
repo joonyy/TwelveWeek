@@ -10,8 +10,10 @@ import {
   scheduleInput,
   completeInput,
   reviewInput,
+  readingInput,
+  readingRecordSchema,
 } from "./schema.js";
-
+import { readingRecords, readingMarkdown } from "../shared/reading-notes.js";
 import {
   emptyPlan,
   prepareWeek,
@@ -245,7 +247,29 @@ export function createApp({
   app.get("/api/cycles/:cycleId", async (req, res) =>
     res.json(await owned(pool, req)),
   );
-
+  app.get("/api/cycles/:cycleId/reading-notes", async (req, res) => {
+    const cycle = await owned(pool, req);
+    const weeks = (
+      await pool.query(
+        "SELECT number,state FROM weeks WHERE cycle_id=$1 ORDER BY number",
+        [cycle.id],
+      )
+    ).rows;
+    res.json({ records: readingRecords(weeks) });
+  });
+  app.get("/api/cycles/:cycleId/reading-notes.md", async (req, res) => {
+    const cycle = await owned(pool, req);
+    const weeks = (
+      await pool.query(
+        "SELECT number,state FROM weeks WHERE cycle_id=$1 ORDER BY number",
+        [cycle.id],
+      )
+    ).rows;
+    res
+      .type("text/markdown")
+      .attachment("twelveweek-reading-notes.md")
+      .send(readingMarkdown(cycle.title, weeks));
+  });
   app.put("/api/cycles/:cycleId", async (req, res) => {
     const input = cycleInput.parse(req.body);
     if (new Date(`${input.startDate}T00:00:00Z`).getUTCDay() !== 1)
@@ -566,6 +590,15 @@ export function createApp({
           const o = findOccurrence(state, req.params.occurrenceId);
           if (!o.date) fail(400, "실행 날짜를 먼저 배치해주세요.");
           if (input.completed) {
+            const tactic = state.tactics.find((t) => t.id === o.tacticId);
+            if (input.readingRecord && !tactic.readingBook?.trim())
+              fail(400, "독서 전술에만 독서 기록을 남길 수 있어요.");
+            if (tactic.readingBook?.trim()) {
+              const record = input.readingRecord ?? o.readingRecord;
+              if (!record)
+                fail(400, "책·단원과 한 줄 생각을 남긴 뒤 완료해주세요.");
+              o.readingRecord = readingRecordSchema.parse(record);
+            }
             const instant = new Date(input.executedAt ?? now());
             if (+instant > +now() + 60000)
               fail(400, "미래의 실행을 완료로 기록할 수 없어요.");
@@ -585,7 +618,28 @@ export function createApp({
       res.json(result);
     },
   );
-
+  app.put(
+    "/api/cycles/:cycleId/weeks/:week/occurrences/:occurrenceId/reading-record",
+    async (req, res) => {
+      const input = readingInput.parse(req.body);
+      const result = await mutateWeek(
+        req,
+        "reading_record.updated",
+        input,
+        (state) => {
+          const o = findOccurrence(state, req.params.occurrenceId);
+          const tactic = state.tactics.find((t) => t.id === o.tacticId);
+          if (!tactic.readingBook?.trim() && !o.readingRecord)
+            fail(400, "독서 전술에만 독서 기록을 남길 수 있어요.");
+          if (!input.record && o.completed)
+            fail(409, "완료 기록을 취소한 뒤 독서 기록을 지울 수 있어요.");
+          if (input.record) o.readingRecord = input.record;
+          else delete o.readingRecord;
+        },
+      );
+      res.json(result);
+    },
+  );
   app.put("/api/cycles/:cycleId/weeks/:week/review", async (req, res) => {
     const input = reviewInput.parse(req.body);
     const result = await mutateWeek(req, "review.saved", input, (state) => {

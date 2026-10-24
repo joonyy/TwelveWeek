@@ -78,7 +78,8 @@ import { VisionAssistant, AIConnectionConsent } from "./VisionAssistant.jsx";
 import WritingGuide from "./WritingGuide.jsx";
 import WeeklyPlanPreview from "./WeeklyPlanPreview.jsx";
 import PlanTimeline from "./PlanTimeline.jsx";
-
+import { ReadingNotebook, ReadingRecordModal } from "./ReadingNotes.jsx";
+import GoalReferenceLink from "./GoalReferenceLink.jsx";
 const CalendarMergePlanner = lazy(() => import("./CalendarMergePlanner.jsx"));
 import { updateVision } from "../../shared/vision-links.js";
 import {
@@ -1336,7 +1337,19 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                   {g.title.trim() || "이름 없는 목표"}
                 </h2>
                 <GoalVisionSummary plan={data} goal={g} />
-
+                <details className="goal-reference">
+                  <summary>기획서 링크 · Notion 등 (선택)</summary>
+                  <Field
+                    label="목표 기획서 링크"
+                    hint="이 목표에 필요한 상세 기획서나 자료의 주소를 연결하세요. 기획서 작성은 목표 착수의 필수 조건이 아닙니다."
+                    type="url"
+                    value={g.referenceUrl || ""}
+                    onChange={(e) =>
+                      goalChange(g.id, "referenceUrl", e.target.value)
+                    }
+                  />
+                  <GoalReferenceLink url={g.referenceUrl} />
+                </details>
                 <div className="two-col">
                   <div className="writing-section">
                     <WritingGuide step="success" weekCount={weekCount} />
@@ -1896,6 +1909,15 @@ function TacticEditor({ tactic: t, index, onChange, onRemove, weekCount }) {
           ))}
         </div>
       </div>
+      <details className="goal-reference">
+        <summary>독서 기록 설정 (선택)</summary>
+        <Field
+          label="독서 기록을 남길 책"
+          hint="책 이름을 설정하면 실행을 완료할 때 단원과 한 줄 생각을 함께 저장합니다. 일반 전술은 비워두세요."
+          value={t.readingBook || ""}
+          onChange={(e) => onChange({ ...t, readingBook: e.target.value })}
+        />
+      </details>
     </div>
   );
 }
@@ -1930,6 +1952,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
     [dragItem, setDragItem] = useState(null),
     [modelEdit, setModelEdit] = useState(null),
     [complete, setComplete] = useState(null),
+    [reading, setReading] = useState(null),
     [review, setReview] = useState(null),
     [reflectionDirty, setReflectionDirty] = useState(false);
   const scheduleHistory = useRef({ undo: [], redo: [] });
@@ -2331,7 +2354,12 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
           }),
         ),
       );
-
+    if (
+      week.state.tactics.find((t) => t.id === o.tacticId)?.readingBook?.trim()
+    ) {
+      setReading({ occurrence: o, completeOnSave: true });
+      return;
+    }
     if (o.date === week.today)
       return run(async () =>
         apply(
@@ -2627,11 +2655,20 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
           {(!modelEdit || mode === "plan") && (
             <LifeAttitude plan={cycle.plan} />
           )}
-
+          {(cycle.plan.goals.some((g) =>
+            g.tactics.some((t) => t.readingBook?.trim()),
+          ) ||
+            week.state.tactics.some((t) => t.readingBook?.trim())) && (
+            <ReadingNotebook
+              cycleId={cycle.id}
+              version={`${number}-${week.version}`}
+              onError={notify}
+            />
+          )}
           {mode === "plan" && (
             <CurrentWeekPlan
               week={week}
-
+              referenceGoals={cycle.plan.goals}
               timetable={
                 canEditModel && !weekModelEditor ? (
                   <p className="loading">시간표 편집을 준비하는 중…</p>
@@ -2788,6 +2825,34 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                               <small>추가 실행 · 일간 점수 기준 제외</small>
                             )}
                             <p>{t.condition}</p>
+                            {o.readingRecord && (
+                              <div className="reading-record-preview">
+                                <strong>
+                                  {o.readingRecord.book} ·{" "}
+                                  {o.readingRecord.chapter}
+                                </strong>
+                                <br />
+                                {o.readingRecord.thought}
+                              </div>
+                            )}
+                            {(t.readingBook?.trim() || o.readingRecord) && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                disabled={busy || cycle.status === "complete"}
+                                aria-label={`${t.title} 독서 기록`}
+                                onClick={() =>
+                                  setReading({
+                                    occurrence: o,
+                                    completeOnSave: false,
+                                  })
+                                }
+                              >
+                                {o.readingRecord
+                                  ? "독서 기록 수정"
+                                  : "독서 기록 남기기"}
+                              </button>
+                            )}
                           </div>
                           <button
                             className="icon-button"
@@ -3157,6 +3222,61 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   );
                   setComplete(null);
                   notify("실행 기록을 저장했어요.");
+                })
+              }
+            />
+          )}
+          {reading && (
+            <ReadingRecordModal
+              key={reading.occurrence.id}
+              Modal={Modal}
+              occurrence={reading.occurrence}
+              tactic={week.state.tactics.find(
+                (t) => t.id === reading.occurrence.tacticId,
+              )}
+              today={week.today}
+              busy={busy}
+              completeOnSave={reading.completeOnSave}
+              onClose={() => setReading(null)}
+              onSave={(record, executedAt, markComplete) =>
+                run(async () => {
+                  apply(
+                    await api(
+                      `${prefix}/occurrences/${reading.occurrence.id}/${markComplete ? "completion" : "reading-record"}`,
+                      {
+                        method: "PUT",
+                        body: markComplete
+                          ? {
+                              version: week.version,
+                              completed: true,
+                              executedAt,
+                              readingRecord: record,
+                            }
+                          : { version: week.version, record },
+                      },
+                    ),
+                  );
+                  setReading(null);
+                  notify(
+                    markComplete
+                      ? "독서 기록과 실행 완료를 저장했어요."
+                      : "독서 기록을 저장했어요.",
+                  );
+                })
+              }
+              onDelete={() =>
+                run(async () => {
+                  apply(
+                    await api(
+                      `${prefix}/occurrences/${reading.occurrence.id}/reading-record`,
+                      {
+                        method: "PUT",
+                        body: { version: week.version, record: null },
+                      },
+                    ),
+                  );
+                  setReading(null);
+                  notify("독서 기록을 지웠어요. 실행 약속은 유지됩니다.");
                 })
               }
             />
