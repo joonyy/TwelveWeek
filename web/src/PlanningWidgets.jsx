@@ -250,6 +250,7 @@ export function WeekCalendar({
 }) {
   const scroll = useRef(null),
     [dragging, setDragging] = useState(null),
+    dragAnchor = useRef(null),
     selection = useRef(null),
     selectionFrame = useRef(null),
     resize = useRef(null),
@@ -273,6 +274,8 @@ export function WeekCalendar({
     function cancel() {
       cancelSelection();
       cancelResize();
+      dragAnchor.current = null;
+      setDragging(null);
       setDropPreview(null);
     }
     window.addEventListener("keydown", escape);
@@ -456,14 +459,19 @@ export function WeekCalendar({
   );
   const fragments = calendarLanes(calendarFragments(visibleBlocks, { wrap }));
   function dropOffset(e) {
+    const anchor = e.dataTransfer.types.includes(EXECUTION_DRAG_TYPE)
+      ? 0
+      : dragAnchor.current?.minutes || 0;
     return Math.min(
       1410,
       Math.max(
         0,
         Math.round(
-          ((e.clientY - e.currentTarget.getBoundingClientRect().top) /
+          (((e.clientY - e.currentTarget.getBoundingClientRect().top) /
             hourHeight) *
-            2,
+            60 -
+            anchor) /
+            30,
         ) * 30,
       ),
     );
@@ -507,6 +515,7 @@ export function WeekCalendar({
     if (!block || block.background || block.locked) return;
     const offset = dropOffset(e);
     onMove(block, { day, time: timeAtOffset(offset) });
+    dragAnchor.current = null;
     setDragging(null);
   }
   return (
@@ -701,7 +710,22 @@ export function WeekCalendar({
                             onSelect?.(blocks.find((x) => x.id === b.id));
                             setDragging(b.id);
                           }}
+                          onPointerDown={(e) => {
+                            if (e.button === 0 && e.isPrimary) {
+                              // Preserve the grabbed point, including when the
+                              // block is taller than the visible scroll area.
+                              dragAnchor.current = {
+                                minutes:
+                                  ((e.clientY -
+                                    e.currentTarget.getBoundingClientRect()
+                                      .top) /
+                                    hourHeight) *
+                                  60,
+                              };
+                            }
+                          }}
                           onDragEnd={() => {
+                            dragAnchor.current = null;
                             setDragging(null);
                             setDropPreview(null);
                           }}

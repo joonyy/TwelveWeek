@@ -819,7 +819,7 @@ test("drag an unplaced execution, resize both edges, cancel, move and retain dai
       name: "목요일 10:00 블록 추가",
       exact: true,
     }),
-    { targetPosition: { x: 20, y: 2 } },
+    { sourcePosition: { x: 20, y: 12 }, targetPosition: { x: 20, y: 2 } },
   );
   await expect(
     calendar.getByRole("button", {
@@ -837,7 +837,7 @@ test("drag an unplaced execution, resize both edges, cancel, move and retain dai
       name: "목요일 13:00 블록 추가",
       exact: true,
     }),
-    { targetPosition: { x: 20, y: 2 } },
+    { sourcePosition: { x: 20, y: 12 }, targetPosition: { x: 20, y: 2 } },
   );
   await expect(page.locator(".toast")).toHaveText(
     "매일 해야 하는 실행은 다른 날짜로 옮길 수 없어요.",
@@ -1430,7 +1430,7 @@ test("calendar selection, deletion, undo, double-click editing and execution pro
       name: "목요일 10:00 블록 추가",
       exact: true,
     }),
-    { targetPosition: { x: 20, y: 2 } },
+    { sourcePosition: { x: 20, y: 12 }, targetPosition: { x: 20, y: 2 } },
   );
   const moved = () => event("모범 집중 블록", "목", "10:00", 120);
   await expect(moved()).toHaveCount(1);
@@ -2598,4 +2598,53 @@ test("an expired legacy timer restores its finished phase and offers sound activ
     alarmSilenced: true,
   });
   expect(saved.finishedAt).toBeGreaterThan(0);
+});
+
+test("moving a weekly block retains the grabbed offset across days and after scrolling, undo and reload", async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  const { getWeek, getCycle } = await setup(page, request, "잡은 위치 유지");
+  const before = await getWeek();
+  await page
+    .getByRole("button", { name: "이번 주 계획표", exact: true })
+    .click();
+  const editor = page.getByRole("region", { name: "주차별 모범 주간 조정" });
+  const calendar = editor.getByRole("region", { name: "모범 주간 캘린더" });
+  const block = (day, time) =>
+    calendar.getByRole("button", {
+      name: `맥날 근무 · ${day}요일 ${time} · 360분`,
+      exact: true,
+    });
+  // Grab 2.5 hours below the start. The pointer lands at Tue 20:30;
+  // the block must start at 18:00, not at the pointer's time.
+  await block("월", "19:00").dragTo(
+    calendar.getByRole("button", {
+      name: "화요일 20:30 블록 추가",
+      exact: true,
+    }),
+    { sourcePosition: { x: 40, y: 140 }, targetPosition: { x: 40, y: 2 } },
+  );
+  await expect(block("화", "18:00")).toHaveCount(1);
+  await editor
+    .getByRole("button", { name: "시간표 실행 취소", exact: true })
+    .click();
+  await expect(block("월", "19:00")).toHaveCount(1);
+  await editor
+    .getByRole("button", { name: "시간표 다시 실행", exact: true })
+    .click();
+  await expect(block("화", "18:00")).toHaveCount(1);
+  await editor
+    .getByRole("button", { name: "이번 주 시간표 저장", exact: true })
+    .click();
+  await expect(page.locator(".toast")).toContainText("저장");
+  await page.reload();
+  await expect(block("화", "18:00")).toHaveCount(1);
+  const saved = await getCycle();
+  expect(
+    saved.plan.weeklyModelWeeks[0].blocks.find((b) => b.title === "맥날 근무"),
+  ).toMatchObject({ day: 1, time: "18:00", minutes: 360 });
+  expect((await getWeek()).state).toEqual(before.state);
+  expect((await getWeek()).score).toEqual(before.score);
 });

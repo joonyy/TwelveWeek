@@ -77,7 +77,7 @@ test("list modes, three starter goals, calendar interaction and commitment wheel
   });
   await event.dragTo(
     page.getByRole("button", { name: "화요일 08:00 블록 추가", exact: true }),
-    { targetPosition: { x: 15, y: 2 } },
+    { sourcePosition: { x: 15, y: 12 }, targetPosition: { x: 15, y: 2 } },
   );
   await expect(
     page.getByRole("button", {
