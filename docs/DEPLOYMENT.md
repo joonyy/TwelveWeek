@@ -1,10 +1,13 @@
 # 개인용 운영 배포 · 2026-10-28
 
-**현재 진행 상태:** API는 `bc498fff2d710f753071504acf17ddb2b87cad62`, 프론트는 `b1b8f1b79e98f114e4c091aeb7a23b1abe625e86`다. 2026-10-28 후속 수정으로 공통 팝업의 텍스트 드래그 이탈 시 닫힘을 고치고, 브라우저별 계정 로그인 기억을 배포·운영 확인했다. `계정 설정`의 비밀번호 재설정·계정 삭제와 작성 중 카드의 초안 삭제도 제공한다. 운영 DB는 migration `007_profile_password` 적용을 완료했으며 초기화를 다시 수행하지 않는다. 팝업/로그인 기억 변경은 프론트만 배포했고 API·DB schema·목표·실행·평가는 변경하지 않았다.
+**현재 진행 상태:** API는 `bc498fff2d710f753071504acf17ddb2b87cad62`, 프론트는 `39260b211999166d54765400872a2769b891bcf6`다. 2026-10-28 23:12 KST에 실행 약속 설명·독서 기록 안내·캘린더 파일 가져오기·블록 드래그 기준점 수정을 배포했다. API 재배포·DB migration·실제 사용자 계획/실행/평가 변경은 수행하지 않았다. 기존 migration `007_profile_password` 초기화는 다시 수행하지 않는다.
 
-- API 배포: `dep-dbgt9rrl550s738605l0` — Render `Deploy succeeded|Live`, 54.9초.
-- 웹 배포: `dep-dbgtqeuk1f9s7395e030` — Render `Deploy succeeded|Live`, 19.3초. 앞선 공통 팝업 수정 배포는 `dep-dbgtm6bl550s7386lh9g`(`e8dced9`)다.
-- 이후 문서만 변경한 commit은 운영 코드의 배포 SHA와 구분한다.
+- API 배포: `dep-dbgt9rrl550s738605l0` — 기존 `Deploy succeeded|Live` 유지.
+- 최신 웹 배포: `dep-dbh05d6i0phs73acpn0g` — Render `Deploy succeeded|Live`, 24.6초, 소스 `39260b2`.
+- [배포 코드 CI](https://github.com/joonyy/TwelveWeek/actions/runs/40695511704): 단위 64개·API 56개·Chromium 57개·빌드 통과.
+- 운영의 기존 10주 주기·2주차에서 새 버튼, `.ics`/iCloud 방식 선택, 독서 전술/기록 위치 안내를 확인했다. 샘플 `.ics`를 브라우저에서 미리 읽어 기존 OVS 근무와의 겹침 및 확인 전 적용 비활성화를 확인했고 적용하지 않고 닫았다. 해당 화면은 `.logs/deployment-20261028/calendar-import-live.png`, `calendar-preview-live.png`에 있다. 이 확인에서 실제 Apple 계정 연결이나 사용자 기록 저장은 하지 않았다.
+- 포인터를 잡은 위치 기준 드래그·이동 뒤 시간표 저장·재조회·실행 취소·실행 기록/점수 보존은 격리된 테스트 DB의 브라우저 검사로 검증했다. 운영 사용자의 실제 시간표를 옮겨 저장하지 않았다.
+- 이전 로그인 기억 웹 배포는 `dep-dbgtqeuk1f9s7395e030`(`b1b8f1b`), 팝업 수정은 `dep-dbgtm6bl550s7386lh9g`(`e8dced9`)다. 이후 문서만 변경한 commit은 운영 코드의 배포 SHA와 구분한다.
 
 - 웹: https://twelveweek-joonyy.onrender.com
 - API 상태: https://twelveweek-joonyy-api.onrender.com/api/health
