@@ -2,7 +2,7 @@
 
 후속 자동 배포 요청으로 `main` push의 CI 성공 후 API·웹을 같은 검사 SHA로 배포 요청하는 작업을 추가했다. 서비스별 Deploy Hook은 GitHub Secrets에 저장하고 Render 자체 Auto-Deploy는 Off로 단일화했다. 더 최신 `main`이 있으면 오래된 요청을 건너뛰며 PR·`dev`·실패한 CI에서는 배포하지 않는다. 유료 자원이나 계정 전체 API 키를 추가하지 않았다. 첫 자동 배포의 실제 결과는 `DEPLOYMENT.md`를 따른다.
 
-최신 웹 배포는 `39260b2`(2026-10-28 23:12 KST)이며 API는 `bc498ff`를 유지한다. [해당 코드 GitHub Checks](https://github.com/joonyy/TwelveWeek/actions/runs/40695511704)에서 단위 64개·PostgreSQL API 56개·Chromium 57개·빌드가 모두 통과했다. 이후 문서 commit은 운영 코드 SHA와 구분한다.
+자동 배포 전 마지막 수동 배포 검증 코드는 웹 `39260b2`(2026-10-28 23:12 KST)와 API `bc498ff`다. 현재 자동 배포의 최신 SHA·Live 상태는 `DEPLOYMENT.md`의 실행 목록 및 Render를 따른다. [해당 코드 GitHub Checks](https://github.com/joonyy/TwelveWeek/actions/runs/40695511704)에서 단위 64개·PostgreSQL API 56개·Chromium 57개·빌드가 모두 통과했다. 이후 문서 commit은 운영 코드 SHA와 구분한다.
 
 실행 배치의 ‘실행 회차’를 ‘배치할 실행 약속’으로 바꾸고 ‘이번 주 약속 N개 중 M번 · 아직 시간 미정’ 또는 실제 배치 시각과 ‘일정 이동’을 표시한다. 번호는 식별용이며 선택 순서가 아니라고 안내한다. 일일 약속과 추가 실행도 구분하며 전술 수·점수·회차 ID는 바꾸지 않는다(`ffe77a4`).
 

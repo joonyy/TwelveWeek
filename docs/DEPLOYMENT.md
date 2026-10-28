@@ -1,6 +1,8 @@
 # 개인용 운영 배포 · 2026-10-28
 
-**현재 진행 상태:** API는 `bc498fff2d710f753071504acf17ddb2b87cad62`, 프론트는 `39260b211999166d54765400872a2769b891bcf6`다. 2026-10-28 23:12 KST에 실행 약속 설명·독서 기록 안내·캘린더 파일 가져오기·블록 드래그 기준점 수정을 배포했다. API 재배포·DB migration·실제 사용자 계획/실행/평가 변경은 수행하지 않았다. 기존 migration `007_profile_password` 초기화는 다시 수행하지 않는다.
+**현재 배포 방식:** `main` push → GitHub Actions 전체 검사 → 검사한 SHA로 Render API·웹 Deploy Hook 호출이다. 최신 SHA·요청 결과의 원본은 [Checks 실행 목록](https://github.com/joonyy/TwelveWeek/actions/workflows/check.yml)과 Render의 두 서비스 Deploys 화면이다. Actions 성공과 실제 Live 전환을 각각 확인한다. 자동 배포가 이어지므로 아래 고정 SHA·배포 ID는 해당 시점의 검증 기록이다. 사용자 기록/DB schema를 바꾸는 코드는 이번 작업에 추가하지 않았다.
+
+**자동 배포 전 최종 수동 배포 기록:** API `bc498fff2d710f753071504acf17ddb2b87cad62`, 프론트 `39260b211999166d54765400872a2769b891bcf6`(2026-10-28 23:12 KST). 실행 약속 설명·독서 기록 안내·캘린더 파일 가져오기·블록 드래그 기준점 수정의 검증 결과다. 기존 migration `007_profile_password` 초기화는 다시 수행하지 않는다.
 
 - API 배포: `dep-dbgt9rrl550s738605l0` — 기존 `Deploy succeeded|Live` 유지.
 - 최신 웹 배포: `dep-dbh05d6i0phs73acpn0g` — Render `Deploy succeeded|Live`, 24.6초, 소스 `39260b2`.
@@ -45,7 +47,7 @@ GitHub repository variable `KEEPALIVE_URLS`에 API 상태 URL을 설정해 기�
 
 Render Blueprint는 `render.yaml`을 사용한다. 공개 저장소 URL로 연결했다. 2026-10-28 후속 요청으로 API·웹의 Render 자체 Auto-Deploy를 모두 Off로 바꾸고, GitHub repository secrets에 서비스별 Deploy Hook 두 개를 등록했다. 실제 훅 값은 저장소에 넣지 않는다. `.github/workflows/check.yml`에서 `main` push의 전체 검증이 성공한 뒤 `deploy` 작업이 검사한 SHA를 두 훅에 전달한다. PR/`dev`·실패한 검사에서는 배포하지 않으며 오래된 `main` 커밋도 건너뛴다. Render API 계정 키나 유료 runner는 사용하지 않는다.
 
-Actions deploy 단계의 성공은 요청 접수이므로 최종 Live 및 소스 SHA는 Render 배포 목록에서 확인한다. 응답이 불확실하면 목록을 확인한 뒤 실패 작업을 재실행한다. 기존 Manual Deploy는 비상용으로 남아 있다. 실제 첫 자동 배포 결과는 아래 검증 기록을 따른다.
+Actions deploy 단계의 성공은 요청 접수이므로 최종 Live 및 소스 SHA는 Render 배포 목록에서 확인한다. 응답이 불확실하면 목록을 확인한 뒤 실패 작업을 재실행한다. 기존 Manual Deploy는 비상용으로 남아 있다. 첫 자동 배포부터 Actions의 `Deploy tested main commit to Render` 요약에 API·웹 배포 ID가 남는다. 해당 ID의 Render 상태와 소스 SHA를 함께 확인한다.
 
 ## 공통 팝업·로그인 기억 확인 결과
 
