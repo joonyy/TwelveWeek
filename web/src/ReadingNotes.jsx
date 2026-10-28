@@ -111,13 +111,16 @@ export function ReadingRecordModal({
   );
 }
 
-export function ReadingNotebook({ cycleId, version, onError }) {
-  const [open, setOpen] = useState(false);
+export function ReadingNotebook({
+  cycleId,
+  version,
+  readingTactics = [],
+  onError,
+}) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     setLoading(true);
     setError("");
@@ -134,7 +137,7 @@ export function ReadingNotebook({ cycleId, version, onError }) {
     return () => {
       cancelled = true;
     };
-  }, [cycleId, version, open]);
+  }, [cycleId, version]);
   const books = [...new Set(records.map((r) => r.book))];
   const download = async () => {
     try {
@@ -151,15 +154,34 @@ export function ReadingNotebook({ cycleId, version, onError }) {
       onError(e.message);
     }
   };
+  // Saved records remain discoverable after the source tactic is removed from
+  // future plans. A user with neither reading tactics nor records sees no box.
+  if (!readingTactics.length && !records.length) return null;
   return (
-    <details
-      className="reading-notebook"
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-    >
+    <details className="reading-notebook">
       <summary>
-        <BookOpen size={16} /> 독서 기록 · 책별로 모아보기
+        <BookOpen size={16} /> 독서 기록 모음
+        {records.length > 0 && <span> · {records.length}개 기록</span>}
       </summary>
-      <button type="button" className="button outlined" onClick={download}>
+      <p className="muted">
+        독서 전술을 실행하며 남긴 책·읽은 단원·한 줄 생각을 책별로 모읍니다.
+      </p>
+      {readingTactics.length > 0 && (
+        <p className="reading-notebook-context">
+          연결된 독서 전술:{" "}
+          {[
+            ...new Set(
+              readingTactics.map((t) => `${t.title} (${t.readingBook.trim()})`),
+            ),
+          ].join(" · ")}
+        </p>
+      )}
+      <button
+        type="button"
+        className="button outlined"
+        onClick={download}
+        disabled={loading || !records.length}
+      >
         <Download size={14} /> 독서 기록 Markdown 내보내기
       </button>
       {loading ? (
@@ -186,8 +208,8 @@ export function ReadingNotebook({ cycleId, version, onError }) {
         ))
       ) : (
         <p className="muted">
-          아직 독서 기록이 없어요. 독서 실행의 ‘독서 기록 남기기’에서
-          시작하세요.
+          아직 저장한 한 줄 생각이 없어요. ‘일간 실행’에서 책이 연결된 전술의
+          ‘독서 기록 남기기’를 눌러 책·단원·한 줄 생각을 작성하세요.
         </p>
       )}
     </details>

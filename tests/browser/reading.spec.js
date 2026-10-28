@@ -236,3 +236,77 @@ test("failed reading saves retain inputs, and a goal's Notion link opens without
       .goals[0].referenceUrl,
   ).toBe(link);
 });
+
+test("reading notebook explains its source, stays hidden without reading work and keeps historical notes after the tactic changes", async ({
+  page,
+  request,
+}) => {
+  const f = await setup(page, request);
+  await page.locator(".reading-notebook > summary").click();
+  const notebook = page.locator(".reading-notebook");
+  await expect(notebook).toContainText("독서 기록 모음");
+  await expect(notebook).toContainText("1단원 읽기 (세컨드 브레인)");
+  await expect(notebook).toContainText("한 줄 생각을 책별로 모읍니다");
+  await expect(
+    notebook.getByRole("button", { name: "독서 기록 Markdown 내보내기" }),
+  ).toBeDisabled();
+  // Remove the book from a future week's plan. No reading record exists yet.
+  let fresh = await (
+    await request.get(f.cycleUrl, { headers: f.headers })
+  ).json();
+  delete fresh.plan.goals[0].tactics[0].readingBook;
+  const updated = await request.put(f.cycleUrl, {
+    headers: f.headers,
+    data: {
+      version: fresh.version,
+      title: fresh.title,
+      startDate: fresh.start_date,
+      weekCount: fresh.week_count,
+      plan: fresh.plan,
+    },
+  });
+  expect(updated.ok()).toBe(true);
+  await request.get(`${f.cycleUrl}/weeks/2`, { headers: f.headers });
+  const checked = page.waitForResponse((r) =>
+    r.url().endsWith(`/cycles/${fresh.id}/reading-notes`),
+  );
+  await page.goto(
+    `/#cycle=${fresh.id}&view=week&week=2&mode=day&day=2026-10-12`,
+  );
+  await page.reload();
+  await checked;
+  await expect(notebook).toHaveCount(0);
+  // The frozen first-week tactic still exists. Save one note through its normal API.
+  const week = await f.getWeek();
+  const occurrence = week.state.occurrences[0];
+  expect(
+    (
+      await request.put(
+        `${f.cycleUrl}/weeks/1/occurrences/${occurrence.id}/reading-record`,
+        {
+          headers: f.headers,
+          data: {
+            version: week.version,
+            record: {
+              book: "세컨드 브레인",
+              chapter: "1장",
+              thought: "전술이 바뀌어도 남겨둘 기록",
+            },
+          },
+        },
+      )
+    ).ok(),
+  ).toBe(true);
+  const before = await f.getWeek();
+  const writes = [];
+  page.on("request", (r) => {
+    if (["POST", "PUT", "DELETE"].includes(r.method())) writes.push(r.url());
+  });
+  await page.reload();
+  await expect(notebook).toBeVisible();
+  await notebook.locator("summary").click();
+  await expect(notebook).toContainText("전술이 바뀌어도 남겨둘 기록");
+  expect(writes).toEqual([]);
+  expect((await f.getWeek()).state).toEqual(before.state);
+  expect((await f.getWeek()).score).toEqual(before.score);
+});

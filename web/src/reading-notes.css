@@ -20,6 +20,12 @@
 .reading-notebook section {
   margin-top: 20px;
 }
+.reading-notebook-context {
+  font-size: 12px;
+  color: #607452;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
 .reading-notebook h3 {
   font-size: 16px;
   color: #36563d;

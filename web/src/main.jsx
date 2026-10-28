@@ -3136,16 +3136,15 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
           {(!modelEdit || mode === "plan") && (
             <LifeAttitude plan={cycle.plan} />
           )}
-          {(cycle.plan.goals.some((g) =>
-            g.tactics.some((t) => t.readingBook?.trim()),
-          ) ||
-            week.state.tactics.some((t) => t.readingBook?.trim())) && (
-            <ReadingNotebook
-              cycleId={cycle.id}
-              version={`${number}-${week.version}`}
-              onError={notify}
-            />
-          )}
+          <ReadingNotebook
+            cycleId={cycle.id}
+            version={`${number}-${week.version}`}
+            readingTactics={[
+              ...cycle.plan.goals.flatMap((g) => g.tactics),
+              ...week.state.tactics,
+            ].filter((t) => t.readingBook?.trim())}
+            onError={notify}
+          />
           {mode === "plan" && (
             <CurrentWeekPlan
               week={week}
