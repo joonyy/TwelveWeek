@@ -1,4 +1,4 @@
-# 개인용 운영 배포 · 2026-10-28
+# 개인용 운영 배포 · 2026-10-29
 
 **현재 배포 방식:** `main` push → GitHub Actions 전체 검사 → 검사한 SHA로 Render API·웹 Deploy Hook 호출이다. 최신 SHA·요청 결과의 원본은 [Checks 실행 목록](https://github.com/joonyy/TwelveWeek/actions/workflows/check.yml)과 Render의 두 서비스 Deploys 화면이다. Actions 성공과 실제 Live 전환을 각각 확인한다. 자동 배포가 이어지므로 아래 고정 SHA·배포 ID는 해당 시점의 검증 기록이다. 사용자 기록/DB schema를 바꾸는 코드는 이번 작업에 추가하지 않았다.
 
@@ -16,6 +16,12 @@
 - 웹은 Render Static Site, API는 Render Free Web Service(Singapore)다.
 - DB는 별도 개인 조직/프로젝트의 Aiven Free PostgreSQL 18이다. Free Asia Pacific 배치 결과는 DigitalOcean Bangalore(`blr`)이며, 특정 도시를 지정한 유료 플랜은 사용하지 않았다.
 - 기존 회사 서비스와 회사 DB는 변경하지 않았다.
+
+## 하루 유형 템플릿 배포 · 2026-10-29
+
+새 API는 선택형 템플릿/구성 방식/날짜별 출처 JSON을 검증·보존한다. DB migration과 기존 행의 일괄 변경은 없다. `/api/health`의 `features.dayTemplates: 1`로 지원 여부를 알리며, 새 필드가 있는 계획 저장은 이를 확인한다. 웹이 먼저 Live가 되거나 API가 이전 코드로 롤백되면 쓰기를 거부해 필드 유실을 막고 입력을 보존한다.
+
+전체 CI 성공 뒤 기존 자동 Deploy Hook 경로가 API·웹을 같은 SHA로 배포한다. 로컬 검증은 단위 74개, 새 PostgreSQL API 1개, 관련 Chromium 4개와 빌드다. 실제 목표·실행 기록은 배포 검증용으로 수정하지 않는다. 운영 화면에서 새 진입점과 저장하지 않는 보관함/적용 미리보기를 확인하며, 저장·경계 처리·소유권·버전 충돌·완료/독서/평가 보존은 격리된 테스트 DB의 결과와 구분한다.
 
 ## 기록의 원본
 
