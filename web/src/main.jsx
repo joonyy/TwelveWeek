@@ -77,6 +77,7 @@ import {
 } from "./PlanningWidgets.jsx";
 import DaySchedule from "./DaySchedule.jsx";
 import CurrentWeekPlan from "./CurrentWeekPlan.jsx";
+import DayTemplateSession, { DayTemplateLibrary } from "./DayTemplates.jsx";
 import LifeAttitude from "./LifeAttitude.jsx";
 import ExecutionPicker from "./ExecutionPicker.jsx";
 import QuickTacticForm from "./QuickTacticForm.jsx";
@@ -2066,12 +2067,51 @@ function Planner({ cycle, setCycle, setView, run, busy, notify, onDirty }) {
                 value={data.modelWeekNotes || ""}
                 onChange={(e) => change("modelWeekNotes", e.target.value)}
               />
-              <ModelWeekEditor
-                blocks={data.modelWeek}
-                onChange={(v) => change("modelWeek", v)}
-                Modal={Modal}
-                readonly={cycle.status === "complete"}
-              />
+              <div
+                className="day-template-mode"
+                role="group"
+                aria-label="모범 주간 구성 방식"
+              >
+                <button
+                  type="button"
+                  className="button outlined"
+                  disabled={cycle.status === "complete"}
+                  aria-pressed={(data.modelWeekMode || "week") === "week"}
+                  onClick={() => change("modelWeekMode", "week")}
+                >
+                  요일별 주간형
+                </button>
+                <button
+                  type="button"
+                  className="button outlined"
+                  disabled={cycle.status === "complete"}
+                  aria-pressed={data.modelWeekMode === "day"}
+                  onClick={() => change("modelWeekMode", "day")}
+                >
+                  하루 유형 조합형
+                </button>
+              </div>
+              {data.modelWeekMode === "day" ? (
+                <>
+                  <p className="muted">
+                    하루 유형을 준비한 뒤 실행 화면의 ‘하루 템플릿 적용’에서
+                    날짜별로 선택하세요. 기본 주간 시간표도 그대로 보존됩니다.
+                  </p>
+                  <DayTemplateLibrary
+                    templates={data.dayTemplates || []}
+                    onChange={(v) => change("dayTemplates", v)}
+                    sourceBlocks={data.modelWeek}
+                    readonly={cycle.status === "complete" || busy}
+                  />
+                </>
+              ) : (
+                <ModelWeekEditor
+                  blocks={data.modelWeek}
+                  onChange={(v) => change("modelWeek", v)}
+                  Modal={Modal}
+                  readonly={cycle.status === "complete"}
+                />
+              )}
             </section>
           </>
         )}
@@ -2412,6 +2452,8 @@ function Execution(props) {
   );
 }
 function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const [dayTemplateSession, setDayTemplateSession] = useState(null);
+  const [dayTemplateDirty, setDayTemplateDirty] = useState(false);
   const [calendarImport, setCalendarImport] = useState(null);
   const [calendarImportBusy, setCalendarImportBusy] = useState(false);
   const [initialNavigation] = useState(() => readNavigation(cycle.id));
@@ -2464,9 +2506,9 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
         JSON.stringify(modelWeekFor(cycle.plan, number)));
   useEffect(() => {
     if (number === reviewNumber) return;
-    onDirty(reviewDirty || modelDirty);
+    onDirty(reviewDirty || modelDirty || dayTemplateDirty);
     return () => onDirty(false);
-  }, [reviewDirty, modelDirty, number]);
+  }, [reviewDirty, modelDirty, dayTemplateDirty, number]);
   const chooseWeek = (n) => {
     if (
       (reviewDirty || reflectionDirty || modelDirty) &&
@@ -2874,6 +2916,14 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
     if (busy || !canEditModel) return;
     setCalendarImport({ cycle, week });
   };
+  const openDayTemplates = () => {
+    if (modelDirty) {
+      notify("작성 중인 시간표를 먼저 저장하거나 변경을 취소해주세요.");
+      return;
+    }
+    if (busy || !canEditModel) return;
+    setDayTemplateSession({ cycle, week });
+  };
   const weekModelEditor = modelEdit && week && canEditModel && (
     <section
       className="panel week-model-editor"
@@ -2888,6 +2938,9 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
             바로 저장됩니다.
           </p>
         </div>
+        <Button variant="outlined" disabled={busy} onClick={openDayTemplates}>
+          하루 템플릿 적용
+        </Button>
       </header>
       <ModelWeekEditor
         key={`${cycle.id}-${number}`}
@@ -3403,6 +3456,13 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   <Button
                     variant="outlined"
                     disabled={busy || !canEditModel}
+                    onClick={openDayTemplates}
+                  >
+                    하루 템플릿 적용
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    disabled={busy || !canEditModel}
                     onClick={openCalendarImport}
                   >
                     캘린더 가져오기
@@ -3782,6 +3842,25 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
             />
           )}
         </>
+      )}
+      {dayTemplateSession && (
+        <DayTemplateSession
+          cycle={dayTemplateSession.cycle}
+          week={dayTemplateSession.week}
+          Modal={Modal}
+          onDirty={setDayTemplateDirty}
+          onClose={() => setDayTemplateSession(null)}
+          onLibrarySaved={(fresh) => {
+            setModelEdit(null);
+            setCycle(fresh);
+          }}
+          onApplied={(fresh) => {
+            setModelEdit(null);
+            setDayTemplateSession(null);
+            setCycle(fresh);
+            notify("하루 템플릿을 날짜별 시간표에 적용했어요.");
+          }}
+        />
       )}
       {calendarImport && (
         <Modal

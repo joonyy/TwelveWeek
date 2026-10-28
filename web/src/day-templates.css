@@ -1,0 +1,122 @@
+.day-template-library fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.day-template-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+.day-template-create .field {
+  margin-bottom: 0;
+}
+.day-template-presets,
+.day-template-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 16px 0;
+}
+.day-template-blocks {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+.day-template-block {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) repeat(4, minmax(100px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  background: #f6f8f2;
+  border: 1px solid #e0e6d8;
+  border-radius: 12px;
+}
+.day-template-block .field {
+  margin: 0;
+  min-width: 0;
+}
+.day-template-block input,
+.day-template-block select {
+  min-width: 0;
+  max-width: 100%;
+}
+.modal.day-template-modal {
+  width: min(1200px, calc(100vw - 32px));
+}
+.day-template-review,
+.day-template-conflicts {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #dce5d2;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.day-template-review > label,
+.day-template-consent,
+.day-template-conflicts label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0;
+}
+.day-template-review input,
+.day-template-consent input,
+.day-template-conflicts input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}
+.day-template-conflicts {
+  background: #fff9f0;
+  border-color: #ddc9a0;
+}
+.day-template-error {
+  color: #9a4934;
+}
+.day-template-mode {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+@media (max-width: 1000px) {
+  .day-template-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .day-template-create {
+    grid-template-columns: 1fr 1fr;
+  }
+  .day-template-create button {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 600px) {
+  .day-template-create {
+    grid-template-columns: 1fr;
+  }
+  .day-template-block {
+    padding: 12px;
+    gap: 12px 8px;
+  }
+  .day-template-block > .field:first-child {
+    grid-column: 1/-1;
+  }
+  .modal.day-template-modal {
+    width: calc(100vw - 24px);
+  }
+  .day-template-actions .button {
+    white-space: normal;
+  }
+}
+
+.day-template-mode [aria-pressed="true"] {
+  background: #163f32;
+  color: #fff;
+  border-color: #163f32;
+}
