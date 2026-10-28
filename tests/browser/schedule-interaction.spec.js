@@ -731,7 +731,7 @@ test("add a week-local repetition after confirmation from daily placement and th
     .click();
   await page.getByLabel("배치할 전술", { exact: true }).selectOption(tactic.id);
   await page
-    .getByLabel("배치할 실행 회차", { exact: true })
+    .getByLabel("배치할 실행 약속", { exact: true })
     .selectOption("extra");
   await page.getByLabel("블록 요일").selectOption("2");
   await page.getByLabel("블록 시작 시각").fill("17:00");
@@ -1696,8 +1696,16 @@ test("current week plan and new tactic blocks schedule existing occurrences with
     "execution",
   );
   await page.getByLabel("배치할 전술").selectOption(weekly.id);
-  await expect(page.getByLabel("배치할 실행 회차")).toHaveValue(
+  await expect(page.getByLabel("배치할 실행 약속")).toHaveValue(
     `${weekly.id}~1`,
+  );
+  await expect(
+    page
+      .getByLabel("배치할 실행 약속")
+      .locator(`option[value="${weekly.id}~1"]`),
+  ).toHaveText("이번 주 약속 3개 중 2번 · 아직 시간 미정");
+  await expect(page.getByRole("dialog")).toContainText(
+    "배치 순서는 자유롭습니다",
   );
   await page.getByLabel("블록 길이(분)").fill("90");
   await page.getByRole("button", { name: "블록 적용", exact: true }).click();
@@ -1723,7 +1731,7 @@ test("current week plan and new tactic blocks schedule existing occurrences with
     .getByRole("button", { name: "시간 블록 추가", exact: true })
     .click();
   await page.getByLabel("배치할 전술").selectOption(weekly.id);
-  await page.getByLabel("배치할 실행 회차").selectOption(`${weekly.id}~1`);
+  await page.getByLabel("배치할 실행 약속").selectOption(`${weekly.id}~1`);
   await page.getByLabel("블록 요일").selectOption("2");
   await page.getByLabel("블록 시작 시각").fill("16:00");
   await page.getByLabel("블록 길이(분)").fill("30");
@@ -1740,7 +1748,7 @@ test("current week plan and new tactic blocks schedule existing occurrences with
     .click();
   await page.getByLabel("배치할 전술").selectOption(daily.id);
   await page.getByLabel("블록 요일").selectOption("3");
-  await expect(page.getByLabel("배치할 실행 회차")).toHaveValue(
+  await expect(page.getByLabel("배치할 실행 약속")).toHaveValue(
     `${daily.id}~3`,
   );
   await page.getByLabel("블록 시작 시각").fill("17:00");

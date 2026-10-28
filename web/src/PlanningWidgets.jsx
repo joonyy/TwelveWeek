@@ -20,9 +20,22 @@ import {
   resizeCalendarBlock,
 } from "../../shared/planning.js";
 import "./planning.css";
-import { hasScheduledTime, occurrenceLabel } from "../../shared/domain.js";
+import { hasScheduledTime } from "../../shared/domain.js";
 
 const days = ["월", "화", "수", "목", "금", "토", "일"];
+function executionPromiseLabel(occurrence, occurrences) {
+  const same = occurrences.filter(
+    (item) =>
+      item.tacticId === occurrence.tacticId &&
+      !!item.extra === !!occurrence.extra,
+  );
+  const number = same.findIndex((item) => item.id === occurrence.id) + 1;
+  if (occurrence.extra) return `추가 실행 ${number}번`;
+  const date = occurrence.requiredDate
+    ? `${occurrence.requiredDate.slice(5).replace("-", ".")}의 약속`
+    : `이번 주 약속 ${same.length}개 중 ${number}번`;
+  return date;
+}
 const kinds = {
   strategy: "전략",
   buffer: "버퍼",
@@ -1047,7 +1060,7 @@ export function ModelWeekEditor({
         (o) => o.id === edit.occurrenceId && !o.completed,
       );
       if (!occurrence) {
-        setMessage("배치할 전술과 실행 회차를 선택해주세요.");
+        setMessage("배치할 전술과 실행 약속을 선택해주세요.");
         return;
       }
       if (
@@ -1365,9 +1378,9 @@ export function ModelWeekEditor({
                       완료 기준: {selectedTactic.condition}
                     </p>
                     <label className="field">
-                      <span>실행 회차</span>
+                      <span>배치할 실행 약속</span>
                       <select
-                        aria-label="배치할 실행 회차"
+                        aria-label="배치할 실행 약속"
                         value={edit.occurrenceId || ""}
                         required
                         disabled={readonly}
@@ -1388,13 +1401,15 @@ export function ModelWeekEditor({
                           });
                         }}
                       >
-                        <option value="">배치할 회차를 선택하세요</option>
+                        <option value="">
+                          시간을 정할 실행 약속을 선택하세요
+                        </option>
                         {eligible.map((o) => (
                           <option key={o.id} value={o.id}>
-                            {occurrenceLabel(o, occurrences)} ·{" "}
+                            {executionPromiseLabel(o, occurrences)} ·{" "}
                             {hasScheduledTime(o)
-                              ? `${o.date} ${o.time}에서 이동`
-                              : "시간 미배치"}
+                              ? `${o.date} ${o.time}${+o.time.slice(0, 2) < 4 ? "(다음 날 새벽)" : ""} 일정 이동`
+                              : "아직 시간 미정"}
                           </option>
                         ))}
                         {onAddExecution &&
@@ -1405,6 +1420,10 @@ export function ModelWeekEditor({
                             <option value="extra">이번 주 1회 더 추가</option>
                           )}
                       </select>
+                      <small>
+                        같은 전술의 이번 주 약속 중 하나에 시간을 정합니다.
+                        숫자는 구분용이며 배치 순서는 자유롭습니다.
+                      </small>
                     </label>
                     {edit.occurrenceId === "extra" && (
                       <p className="footnote">
@@ -1416,8 +1435,8 @@ export function ModelWeekEditor({
                   </>
                 )}
                 <p className="footnote">
-                  전술은 블록 적용 시 실제 실행 일정에 바로 저장됩니다. 이미
-                  배치한 회차를 고르면 그 일정을 옮깁니다.
+                  블록 적용 시 선택한 약속의 실제 실행 일정이 바로 저장됩니다.
+                  ‘일정 이동’을 고르면 기존 약속의 시간을 바꿉니다.
                 </p>
               </div>
             )}
