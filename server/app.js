@@ -30,6 +30,7 @@ import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
 import { mountExecutionTacticRoutes } from "./execution-tactics.js";
+import { mountPrivateAccess } from "./private-access.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -62,6 +63,7 @@ export function createApp({
   codex = null,
   aiEnv = process.env,
   calendarProvider,
+  privateAccessHash = process.env.PRIVATE_ACCESS_KEY_SHA256,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -79,6 +81,7 @@ export function createApp({
     await pool.query("SELECT 1");
     res.json({ ok: true, service: "twelve-week", time: now().toISOString() });
   });
+  mountPrivateAccess(app, { accessHash: privateAccessHash, rateLimits });
   if (rateLimits)
     app.use(
       "/api/profiles",

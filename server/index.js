@@ -2,6 +2,13 @@ import { createPool } from "./db.js";
 import { createApp } from "./app.js";
 import { migrate } from "./migrate.js";
 import { createCodexBridge } from "./codex-bridge.js";
+if (
+  process.env.NODE_ENV === "production" &&
+  !process.env.PRIVATE_ACCESS_KEY_SHA256
+)
+  throw new Error(
+    "Set PRIVATE_ACCESS_KEY_SHA256 before exposing this private installation",
+  );
 const pool = createPool();
 const codex = createCodexBridge();
 await migrate(pool); // A failed migration prevents a misleading healthy deployment.

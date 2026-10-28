@@ -539,15 +539,34 @@ function App() {
 
 function Entry({ onLogin, run, busy }) {
   const [profiles, setProfiles] = useState([]),
-    [name, setName] = useState("");
+    [name, setName] = useState(""),
+    [accessChecked, setAccessChecked] = useState(false),
+    [privateRequired, setPrivateRequired] = useState(false),
+    [unlocked, setUnlocked] = useState(false),
+    [accessKey, setAccessKey] = useState("");
+  const loadEntry = () =>
+    run(async () => {
+      const access = await api("/access");
+      setPrivateRequired(access.required);
+      if (!access.required) setProfiles(await api("/profiles"));
+      setAccessChecked(true);
+    });
   useEffect(() => {
-    run(async () => setProfiles(await api("/profiles")));
+    loadEntry();
   }, []);
+  const unlock = (e) => {
+    e.preventDefault();
+    run(async () => {
+      setProfiles(await api("/profiles", { accessKey }));
+      setUnlocked(true);
+    });
+  };
   const enter = (profile) =>
     run(async () => {
       const session = await api("/sessions", {
         method: "POST",
         body: { profileId: profile.id },
+        accessKey,
       });
       localStorage.setItem("twelve.token", session.token);
       onLogin(session.profile);
@@ -555,12 +574,17 @@ function Entry({ onLogin, run, busy }) {
   const create = (e) => {
     e.preventDefault();
     run(async () => {
-      const p = await api("/profiles", { method: "POST", body: { name } });
+      const p = await api("/profiles", {
+        method: "POST",
+        body: { name },
+        accessKey,
+      });
       setProfiles((prev) => [...prev, p]);
       setName("");
       const s = await api("/sessions", {
         method: "POST",
         body: { profileId: p.id },
+        accessKey,
       });
       localStorage.setItem("twelve.token", s.token);
       onLogin(s.profile);
@@ -603,37 +627,70 @@ function Entry({ onLogin, run, busy }) {
       </div>
       <section className="entry-card">
         <span className="pill">START YOUR SESSION</span>
-        <h2>유저를 선택하세요.</h2>
-        <p className="muted">내 이름으로 들어가 이어서 시작합니다.</p>
-        {profiles.length > 0 && (
-          <div className="profile-list">
-            {profiles.map((p) => (
-              <button disabled={busy} key={p.id} onClick={() => enter(p)}>
-                <span className="avatar">{p.name.slice(0, 1)}</span>
-                <strong>{p.name}</strong>
+        {!accessChecked ? (
+          <>
+            <h2>나의 공간에 연결하는 중…</h2>
+            <p className="muted">서버가 준비되면 이어서 시작할 수 있어요.</p>
+            <Button disabled={busy} onClick={loadEntry}>
+              다시 연결
+            </Button>
+          </>
+        ) : privateRequired && !unlocked ? (
+          <>
+            <h2>나의 공간을 여세요.</h2>
+            <p className="muted">처음 사용하는 기기에서는 접속키가 필요해요.</p>
+            <form onSubmit={unlock}>
+              <Field
+                label="개인 접속키"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={accessKey}
+                onChange={(e) => setAccessKey(e.target.value)}
+              />
+              <Button type="submit" disabled={busy || !accessKey}>
+                공간 열기 <ArrowRight size={18} />
+              </Button>
+            </form>
+            <p className="footnote">
+              유저를 선택하면 이 기기에서 로그인이 유지됩니다.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>유저를 선택하세요.</h2>
+            <p className="muted">내 이름으로 들어가 이어서 시작합니다.</p>
+            {profiles.length > 0 && (
+              <div className="profile-list">
+                {profiles.map((p) => (
+                  <button disabled={busy} key={p.id} onClick={() => enter(p)}>
+                    <span className="avatar">{p.name.slice(0, 1)}</span>
+                    <strong>{p.name}</strong>
+                    <ArrowRight size={18} />
+                  </button>
+                ))}
+              </div>
+            )}
+            <form onSubmit={create}>
+              <Field
+                label="새 유저 이름"
+                placeholder="어떤 이름으로 시작할까요?"
+                maxLength={32}
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Button disabled={busy || !name.trim()} type="submit">
+                나의 공간 만들기
                 <ArrowRight size={18} />
-              </button>
-            ))}
-          </div>
+              </Button>
+            </form>
+            <p className="footnote">
+              신뢰하는 사람끼리 사용하는 프로필 선택 방식입니다. 비밀번호 없이
+              이름을 선택하며, 이 기기에서는 기본 365일 동안 유지됩니다.
+            </p>
+          </>
         )}
-        <form onSubmit={create}>
-          <Field
-            label="새 유저 이름"
-            placeholder="어떤 이름으로 시작할까요?"
-            maxLength={32}
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button disabled={busy || !name.trim()} type="submit">
-            나의 공간 만들기
-            <ArrowRight size={18} />
-          </Button>
-        </form>
-        <p className="footnote">
-          신뢰하는 사람끼리 사용하는 프로필 선택 방식입니다. 비밀번호 없이
-          이름을 선택하며, 이 기기에서는 기본 365일 동안 유지됩니다.
-        </p>
       </section>
     </div>
   );
