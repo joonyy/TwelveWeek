@@ -7,6 +7,7 @@ test("eleven-week setup, execution navigation and reflection follow the chosen p
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByLabel("새 유저 이름").fill("11주 기간 검증");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByLabel("이번 12주의 이름").fill("나의 11주 실행");

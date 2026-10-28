@@ -27,6 +27,7 @@ import {
   Trash2,
   Clock3,
   Flag,
+  KeyRound,
 } from "lucide-react";
 import { api, token } from "./api.js";
 import {
@@ -158,9 +159,10 @@ function Modal({ title, children, onClose, className = "" }) {
   const container = useRef(null);
   useEffect(() => {
     const previous = document.activeElement;
-    const initial = container.current?.querySelector(
-      "input:not(:disabled), textarea:not(:disabled), button",
-    );
+    const initial =
+      container.current?.querySelector(
+        "input:not(:disabled):not([readonly]), textarea:not(:disabled)",
+      ) || container.current?.querySelector("button");
     initial?.focus();
     const trap = (e) => {
       if (e.key !== "Tab") return;
@@ -230,6 +232,7 @@ function App() {
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [principles, setPrinciples] = useState(false),
+    [passwordSettings, setPasswordSettings] = useState(false),
     [editing, setEditing] = useState(false),
     [aiAuthorization, setAIAuthorization] = useState(connectionRequest);
   useEffect(() => {
@@ -268,6 +271,7 @@ function App() {
         setRestoreError("");
         setProfile(null);
         setCycle(null);
+        setPasswordSettings(false);
       }
       return null;
     } finally {
@@ -332,6 +336,7 @@ function App() {
       setRestoreError("");
       setProfile(null);
       setCycle(null);
+      setPasswordSettings(false);
     });
   };
   if (!ready) return <div className="loading">나의 12주를 불러오는 중…</div>;
@@ -420,10 +425,19 @@ function App() {
               변화는 오늘의 실행에서.
             </p>
             {profile && (
-              <button className="logout" onClick={() => navigate(logout)}>
-                <LogOut size={15} />
-                유저 전환
-              </button>
+              <>
+                <button
+                  className="logout"
+                  onClick={() => setPasswordSettings(true)}
+                >
+                  <KeyRound size={15} />
+                  비밀번호 변경
+                </button>
+                <button className="logout" onClick={() => navigate(logout)}>
+                  <LogOut size={15} />
+                  유저 전환
+                </button>
+              </>
             )}
           </div>
         </aside>
@@ -507,6 +521,14 @@ function App() {
         </div>
       )}
       {busy && <div className="busy-line" />}
+      {passwordSettings && profile && (
+        <PasswordSettings
+          run={run}
+          busy={busy}
+          onClose={() => setPasswordSettings(false)}
+          notify={setNotice}
+        />
+      )}
       {principles && (
         <Modal
           title="12주 프로그램의 8요소"
@@ -540,53 +562,51 @@ function App() {
 function Entry({ onLogin, run, busy }) {
   const [profiles, setProfiles] = useState([]),
     [name, setName] = useState(""),
-    [accessChecked, setAccessChecked] = useState(false),
-    [privateRequired, setPrivateRequired] = useState(false),
-    [unlocked, setUnlocked] = useState(false),
-    [accessKey, setAccessKey] = useState("");
+    [newPassword, setNewPassword] = useState(""),
+    [selected, setSelected] = useState(null),
+    [password, setPassword] = useState(""),
+    [loginError, setLoginError] = useState(""),
+    [entryReady, setEntryReady] = useState(false);
   const loadEntry = () =>
     run(async () => {
-      const access = await api("/access");
-      setPrivateRequired(access.required);
-      if (!access.required) setProfiles(await api("/profiles"));
-      setAccessChecked(true);
+      setProfiles(await api("/profiles"));
+      setEntryReady(true);
     });
   useEffect(() => {
     loadEntry();
   }, []);
-  const unlock = (e) => {
+  const enter = (e) => {
     e.preventDefault();
+    setLoginError("");
     run(async () => {
-      setProfiles(await api("/profiles", { accessKey }));
-      setUnlocked(true);
+      try {
+        const session = await api("/sessions", {
+          method: "POST",
+          body: { profileId: selected.id, password },
+        });
+        localStorage.setItem("twelve.token", session.token);
+        setPassword("");
+        onLogin(session.profile);
+      } catch (e) {
+        setLoginError(e.message);
+      }
     });
   };
-  const enter = (profile) =>
-    run(async () => {
-      const session = await api("/sessions", {
-        method: "POST",
-        body: { profileId: profile.id },
-        accessKey,
-      });
-      localStorage.setItem("twelve.token", session.token);
-      onLogin(session.profile);
-    });
   const create = (e) => {
     e.preventDefault();
     run(async () => {
       const p = await api("/profiles", {
         method: "POST",
-        body: { name },
-        accessKey,
+        body: { name, password: newPassword },
       });
       setProfiles((prev) => [...prev, p]);
       setName("");
       const s = await api("/sessions", {
         method: "POST",
-        body: { profileId: p.id },
-        accessKey,
+        body: { profileId: p.id, password: newPassword },
       });
       localStorage.setItem("twelve.token", s.token);
+      setNewPassword("");
       onLogin(s.profile);
     });
   };
@@ -627,7 +647,7 @@ function Entry({ onLogin, run, busy }) {
       </div>
       <section className="entry-card">
         <span className="pill">START YOUR SESSION</span>
-        {!accessChecked ? (
+        {!entryReady ? (
           <>
             <h2>나의 공간에 연결하는 중…</h2>
             <p className="muted">서버가 준비되면 이어서 시작할 수 있어요.</p>
@@ -635,35 +655,24 @@ function Entry({ onLogin, run, busy }) {
               다시 연결
             </Button>
           </>
-        ) : privateRequired && !unlocked ? (
-          <>
-            <h2>나의 공간을 여세요.</h2>
-            <p className="muted">처음 사용하는 기기에서는 접속키가 필요해요.</p>
-            <form onSubmit={unlock}>
-              <Field
-                label="개인 접속키"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={accessKey}
-                onChange={(e) => setAccessKey(e.target.value)}
-              />
-              <Button type="submit" disabled={busy || !accessKey}>
-                공간 열기 <ArrowRight size={18} />
-              </Button>
-            </form>
-            <p className="footnote">
-              유저를 선택하면 이 기기에서 로그인이 유지됩니다.
-            </p>
-          </>
         ) : (
           <>
             <h2>유저를 선택하세요.</h2>
-            <p className="muted">내 이름으로 들어가 이어서 시작합니다.</p>
+            <p className="muted">
+              이름을 선택하고 비밀번호로 이어서 시작합니다.
+            </p>
             {profiles.length > 0 && (
               <div className="profile-list">
                 {profiles.map((p) => (
-                  <button disabled={busy} key={p.id} onClick={() => enter(p)}>
+                  <button
+                    disabled={busy}
+                    key={p.id}
+                    onClick={() => {
+                      setSelected(p);
+                      setPassword("");
+                      setLoginError("");
+                    }}
+                  >
                     <span className="avatar">{p.name.slice(0, 1)}</span>
                     <strong>{p.name}</strong>
                     <ArrowRight size={18} />
@@ -677,22 +686,141 @@ function Entry({ onLogin, run, busy }) {
                 placeholder="어떤 이름으로 시작할까요?"
                 maxLength={32}
                 required
+                autoComplete="username"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              <Button disabled={busy || !name.trim()} type="submit">
+              <Field
+                label="새 유저 비밀번호"
+                hint="4자 이상으로 입력해주세요."
+                type="password"
+                minLength={4}
+                maxLength={128}
+                autoComplete="new-password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <Button
+                disabled={busy || !name.trim() || newPassword.length < 4}
+                type="submit"
+              >
                 나의 공간 만들기
                 <ArrowRight size={18} />
               </Button>
             </form>
             <p className="footnote">
-              신뢰하는 사람끼리 사용하는 프로필 선택 방식입니다. 비밀번호 없이
-              이름을 선택하며, 이 기기에서는 기본 365일 동안 유지됩니다.
+              비밀번호로 로그인하면 이 기기에서는 기본 365일 동안 유지됩니다.
             </p>
           </>
         )}
       </section>
+      {selected && (
+        <Modal
+          title={`${selected.name} 로그인`}
+          onClose={() => setSelected(null)}
+        >
+          <form onSubmit={enter}>
+            <Field
+              label="로그인 이름"
+              autoComplete="username"
+              value={selected.name}
+              readOnly
+            />
+            <Field
+              label="비밀번호"
+              type="password"
+              autoComplete="current-password"
+              required
+              maxLength={128}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {loginError && (
+              <p className="error" role="alert">
+                {loginError}
+              </p>
+            )}
+            <Button type="submit" disabled={busy || !password}>
+              로그인 <ArrowRight size={18} />
+            </Button>
+          </form>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+function PasswordSettings({ run, busy, onClose, notify }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  const save = (e) => {
+    e.preventDefault();
+    setError("");
+    if (newPassword !== confirmation) {
+      setError("새 비밀번호가 일치하지 않아요.");
+      return;
+    }
+    run(async () => {
+      try {
+        await api("/me/password", {
+          method: "PUT",
+          body: { currentPassword, newPassword },
+        });
+        onClose();
+        notify("비밀번호를 변경했어요.");
+      } catch (e) {
+        setError(e.message);
+      }
+    });
+  };
+  return (
+    <Modal title="비밀번호 변경" onClose={onClose}>
+      <form onSubmit={save}>
+        <Field
+          label="현재 비밀번호"
+          type="password"
+          autoComplete="current-password"
+          required
+          maxLength={128}
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+        <Field
+          label="새 비밀번호"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={4}
+          maxLength={128}
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <Field
+          label="새 비밀번호 확인"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={4}
+          maxLength={128}
+          value={confirmation}
+          onChange={(e) => setConfirmation(e.target.value)}
+        />
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        <p className="footnote">
+          변경 후 다른 기기에서는 새 비밀번호로 다시 로그인해주세요.
+        </p>
+        <Button type="submit" disabled={busy}>
+          비밀번호 저장 <Check size={18} />
+        </Button>
+      </form>
+    </Modal>
   );
 }
 

@@ -5,6 +5,7 @@ test("a failed reply survives reload and retries its saved question only once", 
 }) => {
   await page.goto("/");
   await page.getByLabel("새 유저 이름").fill("AI 재시도 사용자");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();

@@ -2,15 +2,11 @@ const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export function token() {
   return localStorage.getItem("twelve.token");
 }
-export async function api(
-  path,
-  { method = "GET", body, blob = false, accessKey } = {},
-) {
+export async function api(path, { method = "GET", body, blob = false } = {}) {
   const response = await fetch(`${base}/api${path}`, {
     method,
     headers: {
       ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
-      ...(accessKey ? { "X-Private-Access-Key": accessKey } : {}),
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

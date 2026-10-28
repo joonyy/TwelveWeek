@@ -8,6 +8,7 @@ test("review Apple conflicts, link a work block and create a study event without
   await page.clock.setFixedTime(new Date("2026-10-07T12:00:00+09:00"));
   await page.goto("/");
   await page.getByLabel("새 유저 이름").fill("Apple 일정 병합 검증");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByLabel("이번 12주의 이름").fill("캘린더와 비교하는 2주");

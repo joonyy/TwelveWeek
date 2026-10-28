@@ -5,11 +5,16 @@ async function fixture(page, request, name) {
   const base = "http://127.0.0.1:4111/api";
   const profile = await (
     await request.post(`${base}/profiles`, {
-      data: { name: `${name}-${crypto.randomUUID().slice(0, 8)}` },
+      data: {
+        password: "test-password",
+        name: `${name}-${crypto.randomUUID().slice(0, 8)}`,
+      },
     })
   ).json();
   const session = await (
-    await request.post(`${base}/sessions`, { data: { profileId: profile.id } })
+    await request.post(`${base}/sessions`, {
+      data: { password: "test-password", profileId: profile.id },
+    })
   ).json();
   const headers = { Authorization: `Bearer ${session.token}` };
   const plan = emptyPlan(2);

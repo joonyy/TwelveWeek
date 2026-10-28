@@ -13,6 +13,7 @@ test("vision partner imports, resumes, asks, edits with permission and undoes on
   await page
     .getByLabel("새 유저 이름")
     .fill(`비전 AI 사용자 ${testInfo.repeatEachIndex}`);
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();
@@ -101,6 +102,7 @@ test("external AI edits do not overwrite an unsaved local vision", async ({
   await page
     .getByLabel("새 유저 이름")
     .fill(`비전 충돌 사용자 ${testInfo.repeatEachIndex}`);
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();
@@ -155,6 +157,7 @@ test("external MCP OAuth shows the actual client and selected-cycle permissions"
   await page
     .getByLabel("새 유저 이름")
     .fill(`AI 연결 승인 사용자 ${testInfo.repeatEachIndex}`);
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();

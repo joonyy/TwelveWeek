@@ -16,6 +16,7 @@ test("profile → guided plan → schedule → binary execution → weekly revie
     fullPage: true,
   });
   await page.getByLabel("새 유저 이름").fill("첫 사용자");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();

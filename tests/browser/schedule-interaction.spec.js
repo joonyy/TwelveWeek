@@ -6,10 +6,14 @@ import ICAL from "ical.js";
 async function setup(page, request, name, customize = () => {}) {
   const base = "http://127.0.0.1:4111/api";
   const profile = await (
-    await request.post(`${base}/profiles`, { data: { name } })
+    await request.post(`${base}/profiles`, {
+      data: { password: "test-password", name },
+    })
   ).json();
   const { token } = await (
-    await request.post(`${base}/sessions`, { data: { profileId: profile.id } })
+    await request.post(`${base}/sessions`, {
+      data: { password: "test-password", profileId: profile.id },
+    })
   ).json();
   const headers = { Authorization: `Bearer ${token}` };
   const plan = emptyPlan(2);

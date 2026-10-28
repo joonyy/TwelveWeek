@@ -9,11 +9,16 @@ test("model week shows the full milestone timeline, week details and unsaved pla
   const base = "http://127.0.0.1:4111/api";
   const profile = await (
     await request.post(`${base}/profiles`, {
-      data: { name: `로드맵 ${randomUUID().slice(0, 8)}` },
+      data: {
+        password: "test-password",
+        name: `로드맵 ${randomUUID().slice(0, 8)}`,
+      },
     })
   ).json();
   const { token } = await (
-    await request.post(`${base}/sessions`, { data: { profileId: profile.id } })
+    await request.post(`${base}/sessions`, {
+      data: { password: "test-password", profileId: profile.id },
+    })
   ).json();
   const headers = { Authorization: `Bearer ${token}` };
   const plan = emptyPlan(10);
@@ -140,6 +145,7 @@ test("weekly preview groups existing tactics, keeps scoring untouched and reflec
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await page.getByLabel("새 유저 이름").fill("주차별 계획 검증");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByLabel("이번 12주의 이름").fill("주차별로 보는 10주");

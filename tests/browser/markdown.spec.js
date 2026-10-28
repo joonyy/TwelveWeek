@@ -46,6 +46,7 @@ test("Markdown conversations retain formatting after reload and stay within mobi
   await page
     .getByLabel("새 유저 이름")
     .fill(`Markdown 사용자 ${testInfo.repeatEachIndex}`);
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
   await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
   await page.getByRole("button", { name: "비전부터 작성하기" }).click();
