@@ -2,8 +2,9 @@
 # API origin and frontend origin are supplied in the Render setup screen.
 services:
   - type: web
-    name: twelve-week-api
+    name: twelveweek-joonyy-api
     runtime: node
+    region: singapore
     plan: free
     buildCommand: npm ci --omit=dev
     startCommand: npm start
@@ -23,6 +24,8 @@ services:
         sync: false
       - key: TOKEN_TTL_DAYS
         value: "365"
+      - key: PRIVATE_ACCESS_KEY_SHA256
+        sync: false
       - key: API_PUBLIC_URL
         sync: false
       - key: WEB_PUBLIC_URL
@@ -32,7 +35,7 @@ services:
       - key: CALENDAR_SECRETS_KEY
         generateValue: true
   - type: web
-    name: twelve-week-web
+    name: twelveweek-joonyy
     runtime: static
     buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: ./web/dist
