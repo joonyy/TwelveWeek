@@ -1,6 +1,10 @@
 # 개인용 운영 배포 · 2026-10-28
 
-**현재 진행 상태:** 최초 공통 접속키 버전은 운영 중이다. 후속 이름·비밀번호 로그인 개선은 구현/검증과 기존 두 계정의 DB 초기화까지 완료했으며, Render API·프론트 재배포는 컴퓨터 제어 연결 복구를 기다리고 있다. 아래의 비밀번호 로그인 설명은 새 배포 대상의 동작이다. 운영 DB는 이미 migration `007_profile_password`가 적용돼 있어 배포 시 초기값을 다시 지정할 필요가 없다.
+**현재 진행 상태:** 2026-10-28 19:28 KST에 API·프론트 모두 `02f786e266d545be2c19380aee9f061bc7f2b7f8` 배포를 완료했다. 사이트 공통 접속키 대신 이름 선택·사용자별 비밀번호 로그인을 사용한다. 운영 DB는 migration `007_profile_password` 적용을 완료했으며 초기화를 다시 수행하지 않는다. 기존 계정 로그인, 잘못된 비밀번호 거부, 활성 10주 주기와 2주차 일간 화면의 새로고침 복원, 390px 화면을 실제 운영 URL에서 확인했다.
+
+- API 배포: `dep-dbgss1ks728c73cabfbg` — Render `Deploy succeeded|Live`, 39.1초.
+- 웹 배포: `dep-dbgss3mc6qcc73cie0hg` — Render `Deploy succeeded|Live`, 26.3초.
+- 이후 문서만 변경한 commit은 운영 코드의 배포 SHA와 구분한다.
 
 - 웹: https://twelveweek-joonyy.onrender.com
 - API 상태: https://twelveweek-joonyy-api.onrender.com/api/health
@@ -32,7 +36,16 @@ GitHub repository variable `KEEPALIVE_URLS`에 API 상태 URL을 설정해 기�
 
 Render Blueprint는 `render.yaml`을 사용한다. 공개 저장소 URL로 연결했으며 GitHub 계정에 추가 저장소 권한을 부여하지 않았다. API Settings의 Auto-Deploy 표시는 `On Commit`이다. 코드 변경 후에는 새 commit SHA가 실제로 배포됐는지 확인하고, 반영되지 않았다면 Manual Deploy/Blueprint Manual sync를 사용한다. GitHub CI 성공만으로 운영 배포 완료를 판단하지 않는다.
 
-## 확인한 결과
+## 이름·비밀번호 전환 확인 결과
+
+- [배포 코드 GitHub CI](https://github.com/joonyy/TwelveWeek/actions/runs/40657981923): 단위 58개·PostgreSQL API 49개·Chromium 44개·빌드 통과.
+- 운영 `/api/access`가 `{required:false, authentication:"password"}`를 반환하고, 이름 목록에 비밀번호 해시를 노출하지 않음.
+- 로그인하지 않은 주기 접근과 잘못된 비밀번호는 401, 기존 계정의 승인된 초기 비밀번호 로그인은 성공. API 검증용으로 발급한 세션만 종료했다.
+- 기존 활성 주기(2026-10-19~12-27, 10주)·2주차·일간 화면을 열고 새로고침 후 같은 주소와 화면 복원을 확인했다. 390px viewport에서 문서 너비도 390px였다. UI로 로그인한 사용자의 세션은 유지했다.
+- DB 초기화 전 내용 해시 대조 결과를 보존하며, 배포 후 읽기 전용으로 9개 테이블의 기존 건수를 다시 확인했다. 목표·주간 실행·평가·변경 이력·대화 기록을 수정하지 않았다.
+- 비밀값을 제외한 API/DB 검증 결과와 모바일 화면은 로컬 `.logs/deployment-20261028/password-live-*`에 보관한다. 실제 아이폰 Safari 조작과 알림/백그라운드 타이머는 별도 기기 확인 대상이다.
+
+## 최초 공통 접속키 배포 당시 확인 결과 · 과거 기록
 
 - 배포 코드의 GitHub Checks: 단위 61개, PostgreSQL API 44개, Chromium 43개와 빌드 통과.
 - TLS 인증서를 검증한 Aiven 연결과 데이터 이전 전후 내용 대조 통과.
