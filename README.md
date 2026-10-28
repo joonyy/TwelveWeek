@@ -5,6 +5,8 @@ React/Vite 프론트, Express API, PostgreSQL DB를 사용한다. 배포 대상�
 
 저장소: [joonyy/TwelveWeek](https://github.com/joonyy/TwelveWeek)
 
+실제 사용: **https://twelveweek-joonyy.onrender.com**. 2026-10-28 Render + Aiven 배포와 기존 기록 이전을 완료했다. 운영 기록과 개발용 로컬 DB는 자동 동기화되지 않는다. 접속 방법·백업·배포 검증은 [운영 배포 기록](docs/DEPLOYMENT.md)을 따른다.
+
 ## 로컬 실행
 
 Node.js 22.12 이상, npm, 실행 중인 Docker가 필요하다.
@@ -20,7 +22,7 @@ npm run dev
 
 터미널·AI 작업 세션을 닫아도 로컬 앱을 계속 사용하려면 `npm run dev:background`로 시작한다. 독립된 프로세스로 실행하며 로그는 Git에서 제외된 `.logs/dev.log`에 남긴다. 이미 양쪽 서버가 실행 중이면 중복 시작하지 않는다.
 
-macOS에서는 `scripts/local-start.command`를 실행하면 Docker Desktop → 기존 DB → API·웹 서버 준비 후 브라우저를 연다. 바탕화면의 `TwelveWeek.command`는 이 파일을 호출한다. 이미 실행 중이면 같은 앱을 다시 열며 터미널을 닫아도 서버는 유지된다. 디스크 여유 공간이 1GB 미만이면 새 실행을 중단하고 안내한다.
+macOS에서는 개발용 `scripts/local-start.command`를 실행하면 Docker Desktop → 기존 DB → API·웹 서버 준비 후 브라우저를 연다. 이미 실행 중이면 같은 로컬 앱을 다시 열며 터미널을 닫아도 서버는 유지된다. 디스크 여유 공간이 1GB 미만이면 새 실행을 중단하고 안내한다. 실제 사용을 위한 바탕화면의 `TwelveWeek.command`는 운영 URL을 연다.
 
 - 웹: http://127.0.0.1:5178
 - API 상태: http://127.0.0.1:4110/api/health
@@ -51,7 +53,7 @@ npm run build
 
 ## Render + Aiven 배포 준비
 
-GitHub 저장소는 [joonyy/TwelveWeek](https://github.com/joonyy/TwelveWeek)다. Aiven DB와 Render 서비스는 아직 연결하지 않았으며 아래 순서로 배포한다.
+GitHub 저장소는 [joonyy/TwelveWeek](https://github.com/joonyy/TwelveWeek)다. 현재 전용 Aiven DB와 Render 서비스가 연결돼 있다. 아래 순서는 새로운 환경에 재구성할 때의 절차다.
 
 1. **전용 Aiven PostgreSQL** 서비스와 앱용 DB를 생성한다. 기존 TheCorner DB를 재사용하지 않는다. 연결 URI와 해당 서비스 CA 인증서를 준비한다.
 2. 저장소를 Render Blueprint로 연결하여 `render.yaml`을 적용한다. API는 Node Web Service, 프론트는 Static Site다.
@@ -80,7 +82,7 @@ GitHub 저장소는 [joonyy/TwelveWeek](https://github.com/joonyy/TwelveWeek)다
 
 ## 사용자 선택 방식
 
-요청한 콘솔게임식 프로필 선택이다. 이름 목록을 공개하며 누구나 해당 프로필을 선택할 수 있다. 토큰으로 API 데이터의 소유 범위를 나누지만, 이름 선택 자체는 본인 인증이 아니다.
+요청한 콘솔게임식 프로필 선택이다. 로컬 개발 환경에서는 이름 목록을 공개하며 누구나 해당 프로필을 선택할 수 있다. 토큰으로 API 데이터의 소유 범위를 나누지만, 이름 선택 자체는 본인 인증이 아니다.
 
 위 설명은 접속키를 설정하지 않은 로컬 개발 환경 기준이다. 운영 서버는 `PRIVATE_ACCESS_KEY_SHA256`가 없으면 시작하지 않으며, 접속키 없이 프로필 목록·생성·신규 세션 발급을 요청할 수 없다. 기존 사용자 세션과 MCP OAuth 토큰은 각자의 인증을 계속 사용한다. 여러 사람에게 서비스를 제공하기 위한 개별 사용자 인증은 별도 범위다.
 
