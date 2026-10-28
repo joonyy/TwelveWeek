@@ -96,15 +96,25 @@ before(async () => {
     "TRUNCATE profiles,cycles,weeks,changes,sessions RESTART IDENTITY CASCADE",
   );
   const p = (
-    await request(app).post("/api/profiles").send({ name: "AI 소유자" })
+    await request(app)
+      .post("/api/profiles")
+      .send({ password: "test-password", name: "AI 소유자" })
   ).body;
-  owner = (await request(app).post("/api/sessions").send({ profileId: p.id }))
-    .body.token;
+  owner = (
+    await request(app)
+      .post("/api/sessions")
+      .send({ password: "test-password", profileId: p.id })
+  ).body.token;
   const p2 = (
-    await request(app).post("/api/profiles").send({ name: "다른 사용자" })
+    await request(app)
+      .post("/api/profiles")
+      .send({ password: "test-password", name: "다른 사용자" })
   ).body;
-  other = (await request(app).post("/api/sessions").send({ profileId: p2.id }))
-    .body.token;
+  other = (
+    await request(app)
+      .post("/api/sessions")
+      .send({ password: "test-password", profileId: p2.id })
+  ).body.token;
   const plan = emptyPlan();
   plan.longVision = "처음 비전";
   plan.personalVision = "3년 뒤 생활";

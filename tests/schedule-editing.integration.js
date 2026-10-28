@@ -25,13 +25,16 @@ async function fixture() {
   const p = (
     await request(app)
       .post("/api/profiles")
-      .send({ name: `배치 편집 ${randomUUID().slice(0, 8)}` })
+      .send({
+        password: "test-password",
+        name: `배치 편집 ${randomUUID().slice(0, 8)}`,
+      })
       .expect(201)
   ).body;
   const { token } = (
     await request(app)
       .post("/api/sessions")
-      .send({ profileId: p.id })
+      .send({ password: "test-password", profileId: p.id })
       .expect(200)
   ).body;
   const call = (method, path, body, target = app) => {

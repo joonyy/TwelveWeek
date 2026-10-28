@@ -73,9 +73,19 @@ after(async () => {
 });
 test("health, username profiles, long sessions and token hashes", async () => {
   await request(app).get("/api/health").expect(200);
-  const p = (await call("post", "/profiles", { name: "테스트 사용자" })).body;
+  const p = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "테스트 사용자",
+    })
+  ).body;
   profileId = p.id;
-  const session = (await call("post", "/sessions", { profileId: p.id })).body;
+  const session = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: p.id,
+    })
+  ).body;
   owner = session.token;
   assert.equal(owner.length, 43);
   assert.equal(session.expiresAt, "2027-10-07T03:00:00.000Z");
@@ -86,9 +96,22 @@ test("health, username profiles, long sessions and token hashes", async () => {
   ).rows[0].token_hash;
   assert.notEqual(stored, owner);
   assert.equal(stored, createHash("sha256").update(owner).digest("hex"));
-  const p2 = (await call("post", "/profiles", { name: "두 번째" })).body;
-  other = (await call("post", "/sessions", { profileId: p2.id })).body.token;
-  await call("post", "/profiles", { name: " 테스트 사용자 " }).expect(409);
+  const p2 = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "두 번째",
+    })
+  ).body;
+  other = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: p2.id,
+    })
+  ).body.token;
+  await call("post", "/profiles", {
+    password: "test-password",
+    name: " 테스트 사용자 ",
+  }).expect(409);
   await call("get", "/me", null, "x".repeat(43)).expect(401);
 });
 test("Monday validation, full plan persistence and optimistic concurrency", async () => {
@@ -342,10 +365,18 @@ test("13th-week reflection persists, finish preserves read-only history and perm
   }).expect(200);
 });
 test("new editor persists modes and wheel choices, ignores blank starter goals at activation", async () => {
-  const profile = (await call("post", "/profiles", { name: "새 작성 방식" }))
-    .body;
-  const who = (await call("post", "/sessions", { profileId: profile.id })).body
-    .token;
+  const profile = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "새 작성 방식",
+    })
+  ).body;
+  const who = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: profile.id,
+    })
+  ).body.token;
   let draft = (
     await call(
       "post",
@@ -420,10 +451,18 @@ test("new editor persists modes and wheel choices, ignores blank starter goals a
   assert.equal(saved.plan.longVision, "첫 비전\n두 번째 비전");
 });
 test("goal vision links persist, remain owned, preserve deleted references and leave frozen execution unchanged", async () => {
-  const profile = (await call("post", "/profiles", { name: "비전 연결 검증" }))
-    .body;
-  const who = (await call("post", "/sessions", { profileId: profile.id })).body
-    .token;
+  const profile = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "비전 연결 검증",
+    })
+  ).body;
+  const who = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: profile.id,
+    })
+  ).body.token;
   let p = editablePlan({
     ...emptyPlan(11),
     personalVision: "회복이 있는 생활",
@@ -527,9 +566,18 @@ test("sessions can be revoked and expired tokens cannot resume", async () => {
   await call("get", "/me").expect(401);
 });
 test("eleven-week activation and finish use selected duration and keep legacy default", async () => {
-  const profile = (await call("post", "/profiles", { name: "11주 검증" })).body;
-  const who = (await call("post", "/sessions", { profileId: profile.id })).body
-    .token;
+  const profile = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "11주 검증",
+    })
+  ).body;
+  const who = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: profile.id,
+    })
+  ).body.token;
   for (const weekCount of [0, 13, 1.5])
     await call(
       "post",
@@ -624,10 +672,18 @@ test("eleven-week activation and finish use selected duration and keep legacy de
   }
 });
 test("active shortening excludes future weeks without deleting records or changing frozen scores", async () => {
-  const profile = (await call("post", "/profiles", { name: "기간 변경 검증" }))
-    .body;
-  const who = (await call("post", "/sessions", { profileId: profile.id })).body
-    .token;
+  const profile = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "기간 변경 검증",
+    })
+  ).body;
+  const who = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: profile.id,
+    })
+  ).body.token;
   const p = structuredClone(plan);
   p.goals[0].tactics.forEach((t) => {
     t.weeks = [1, 11, 12];

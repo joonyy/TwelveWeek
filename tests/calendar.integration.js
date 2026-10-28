@@ -55,11 +55,31 @@ before(async () => {
 });
 after(async () => pool.end());
 test("iCloud credentials are encrypted, owned and never returned", async () => {
-  const p = (await call("post", "/profiles", { name: "Calendar owner" })).body;
+  const p = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "Calendar owner",
+    })
+  ).body;
   profileId = p.id;
-  owner = (await call("post", "/sessions", { profileId: p.id })).body.token;
-  const p2 = (await call("post", "/profiles", { name: "Calendar other" })).body;
-  other = (await call("post", "/sessions", { profileId: p2.id })).body.token;
+  owner = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: p.id,
+    })
+  ).body.token;
+  const p2 = (
+    await call("post", "/profiles", {
+      password: "test-password",
+      name: "Calendar other",
+    })
+  ).body;
+  other = (
+    await call("post", "/sessions", {
+      password: "test-password",
+      profileId: p2.id,
+    })
+  ).body.token;
   const config = (await call("get", "/calendar/apple").expect(200)).body;
   assert.equal(config.connected, false);
   const connected = (

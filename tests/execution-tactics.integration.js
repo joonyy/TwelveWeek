@@ -28,10 +28,15 @@ async function fixture(customize = () => {}) {
   const p = (
     await request(app)
       .post("/api/profiles")
-      .send({ name: `전술 추가 ${randomUUID().slice(0, 8)}` })
+      .send({
+        password: "test-password",
+        name: `전술 추가 ${randomUUID().slice(0, 8)}`,
+      })
   ).body;
   const token = (
-    await request(app).post("/api/sessions").send({ profileId: p.id })
+    await request(app)
+      .post("/api/sessions")
+      .send({ password: "test-password", profileId: p.id })
   ).body.token;
   const call = (method, path, body, target = app) => {
     let req = request(target)

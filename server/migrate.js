@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { createPool, transaction } from "./db.js";
-export async function migrate(pool) {
+import { hashPassword } from "./passwords.js";
+export async function migrate(
+  pool,
+  { initialProfilePassword = process.env.INITIAL_PROFILE_PASSWORD } = {},
+) {
   await transaction(pool, async (db) => {
     await db.query("SELECT pg_advisory_xact_lock(12052026)");
     await db.query(
@@ -14,6 +18,7 @@ export async function migrate(pool) {
       "004_vision_ai",
       "005_ai_token_family",
       "006_calendar",
+      "007_profile_password",
     ]) {
       const existing = await db.query(
         "SELECT 1 FROM schema_migrations WHERE name=$1",
@@ -25,6 +30,28 @@ export async function migrate(pool) {
           "utf8",
         );
         await db.query(sql);
+        if (name === "007_profile_password") {
+          // User-approved one-time initial password for pre-existing profiles.
+          // Running migrate again never resets a changed password.
+          const profiles = await db.query("SELECT id FROM profiles FOR UPDATE");
+          if (
+            profiles.rowCount &&
+            (typeof initialProfilePassword !== "string" ||
+              initialProfilePassword.length < 4 ||
+              initialProfilePassword.length > 128)
+          )
+            throw new Error(
+              "Set INITIAL_PROFILE_PASSWORD when upgrading existing profiles",
+            );
+          for (const profile of profiles.rows)
+            await db.query("UPDATE profiles SET password_hash=$1 WHERE id=$2", [
+              await hashPassword(initialProfilePassword),
+              profile.id,
+            ]);
+          await db.query(
+            "ALTER TABLE profiles ALTER COLUMN password_hash SET NOT NULL",
+          );
+        }
         await db.query("INSERT INTO schema_migrations(name) VALUES($1)", [
           name,
         ]);

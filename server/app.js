@@ -30,7 +30,7 @@ import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
 import { mountExecutionTacticRoutes } from "./execution-tactics.js";
-import { mountPrivateAccess } from "./private-access.js";
+import { hashPassword, verifyPassword } from "./passwords.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -54,6 +54,14 @@ const nameSchema = z
   .min(1)
   .max(32)
   .refine((v) => !/[\x00-\x1f\x7f]/.test(v));
+const passwordSchema = z.string().min(4).max(128);
+const loginSchema = z
+  .object({
+    profileId: z.uuid().optional(),
+    name: nameSchema.optional(),
+    password: z.string().min(1).max(128),
+  })
+  .refine((v) => !!v.profileId !== !!v.name);
 export function createApp({
   pool,
   now = () => new Date(),
@@ -63,7 +71,6 @@ export function createApp({
   codex = null,
   aiEnv = process.env,
   calendarProvider,
-  privateAccessHash = process.env.PRIVATE_ACCESS_KEY_SHA256,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -81,7 +88,12 @@ export function createApp({
     await pool.query("SELECT 1");
     res.json({ ok: true, service: "twelve-week", time: now().toISOString() });
   });
-  mountPrivateAccess(app, { accessHash: privateAccessHash, rateLimits });
+  // Compatibility for a previously cached entry screen; no site-wide key.
+  app.get("/api/access", (req, res) =>
+    res
+      .set("Cache-Control", "no-store")
+      .json({ required: false, authentication: "password" }),
+  );
   if (rateLimits)
     app.use(
       "/api/profiles",
@@ -109,12 +121,16 @@ export function createApp({
     res.json(rows.rows);
   });
   app.post("/api/profiles", async (req, res) => {
-    const name = nameSchema.parse(req.body.name).normalize("NFKC").trim();
+    const input = z
+      .object({ name: nameSchema, password: passwordSchema })
+      .parse(req.body);
+    const name = input.name.normalize("NFKC").trim();
     if (!name) fail(400, "유저명을 입력해주세요.");
+    const passwordHash = await hashPassword(input.password);
     try {
       const result = await pool.query(
-        "INSERT INTO profiles(id,name,normalized_name) VALUES($1,$2,$3) RETURNING id,name",
-        [randomUUID(), name, name.toLocaleLowerCase("ko-KR")],
+        "INSERT INTO profiles(id,name,normalized_name,password_hash) VALUES($1,$2,$3,$4) RETURNING id,name",
+        [randomUUID(), name, name.toLocaleLowerCase("ko-KR"), passwordHash],
       );
       res.status(201).json(result.rows[0]);
     } catch (e) {
@@ -124,22 +140,37 @@ export function createApp({
     }
   });
   app.post("/api/sessions", async (req, res) => {
-    const profileId = uuid.parse(req.body.profileId);
-    const profile = (
-      await pool.query("SELECT id,name FROM profiles WHERE id=$1", [profileId])
-    ).rows[0];
-    if (!profile) fail(404, "유저를 찾을 수 없어요.");
-    const token = randomBytes(32).toString("base64url");
-    const ttl = Number(process.env.TOKEN_TTL_DAYS || 365);
-    if (!Number.isInteger(ttl) || ttl < 1 || ttl > 730)
-      throw new Error("TOKEN_TTL_DAYS must be between 1 and 730");
-    const expiresAt = new Date(+now() + ttl * 86400000);
-    await pool.query("DELETE FROM sessions WHERE expires_at < $1", [now()]);
-    await pool.query(
-      "INSERT INTO sessions(token_hash,profile_id,expires_at) VALUES($1,$2,$3)",
-      [hash(token), profile.id, expiresAt],
-    );
-    res.json({ token, expiresAt, profile });
+    const input = loginSchema.parse(req.body);
+    const session = await transaction(pool, async (db) => {
+      // Serialize issuance against password changes so an old password cannot
+      // mint a new session after the other sessions have been revoked.
+      const stored = (
+        await db.query(
+          input.profileId
+            ? "SELECT id,name,password_hash FROM profiles WHERE id=$1 FOR SHARE"
+            : "SELECT id,name,password_hash FROM profiles WHERE normalized_name=$1 FOR SHARE",
+          [
+            input.profileId ||
+              input.name.normalize("NFKC").trim().toLocaleLowerCase("ko-KR"),
+          ],
+        )
+      ).rows[0];
+      if (!(await verifyPassword(input.password, stored?.password_hash)))
+        fail(401, "이름 또는 비밀번호를 확인해주세요.");
+      const profile = { id: stored.id, name: stored.name };
+      const token = randomBytes(32).toString("base64url");
+      const ttl = Number(process.env.TOKEN_TTL_DAYS || 365);
+      if (!Number.isInteger(ttl) || ttl < 1 || ttl > 730)
+        throw new Error("TOKEN_TTL_DAYS must be between 1 and 730");
+      const expiresAt = new Date(+now() + ttl * 86400000);
+      await db.query("DELETE FROM sessions WHERE expires_at < $1", [now()]);
+      await db.query(
+        "INSERT INTO sessions(token_hash,profile_id,expires_at) VALUES($1,$2,$3)",
+        [hash(token), profile.id, expiresAt],
+      );
+      return { token, expiresAt, profile };
+    });
+    res.json(session);
   });
   app.use("/api", async (req, res, next) => {
     const token = req.headers.authorization?.match(
@@ -167,6 +198,35 @@ export function createApp({
     await pool.query("DELETE FROM sessions WHERE token_hash=$1", [
       req.tokenHash,
     ]);
+    res.status(204).end();
+  });
+  app.put("/api/me/password", async (req, res) => {
+    const input = z
+      .object({
+        currentPassword: z.string().min(1).max(128),
+        newPassword: passwordSchema,
+      })
+      .parse(req.body);
+    await transaction(pool, async (db) => {
+      const profile = (
+        await db.query(
+          "SELECT password_hash FROM profiles WHERE id=$1 FOR UPDATE",
+          [req.profile.id],
+        )
+      ).rows[0];
+      if (
+        !(await verifyPassword(input.currentPassword, profile?.password_hash))
+      )
+        fail(400, "현재 비밀번호를 확인해주세요.");
+      await db.query("UPDATE profiles SET password_hash=$1 WHERE id=$2", [
+        await hashPassword(input.newPassword),
+        req.profile.id,
+      ]);
+      await db.query(
+        "DELETE FROM sessions WHERE profile_id=$1 AND token_hash<>$2",
+        [req.profile.id, req.tokenHash],
+      );
+    });
     res.status(204).end();
   });
   const owned = async (db, req, lock = false) => {
