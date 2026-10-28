@@ -24,8 +24,6 @@ services:
         sync: false
       - key: TOKEN_TTL_DAYS
         value: "365"
-      - key: PRIVATE_ACCESS_KEY_SHA256
-        sync: false
       - key: API_PUBLIC_URL
         sync: false
       - key: WEB_PUBLIC_URL

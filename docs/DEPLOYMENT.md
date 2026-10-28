@@ -1,5 +1,7 @@
 # 개인용 운영 배포 · 2026-10-28
 
+**현재 진행 상태:** 최초 공통 접속키 버전은 운영 중이다. 후속 이름·비밀번호 로그인 개선은 구현/검증과 기존 두 계정의 DB 초기화까지 완료했으며, Render API·프론트 재배포는 컴퓨터 제어 연결 복구를 기다리고 있다. 아래의 비밀번호 로그인 설명은 새 배포 대상의 동작이다. 운영 DB는 이미 migration `007_profile_password`가 적용돼 있어 배포 시 초기값을 다시 지정할 필요가 없다.
+
 - 웹: https://twelveweek-joonyy.onrender.com
 - API 상태: https://twelveweek-joonyy-api.onrender.com/api/health
 - 웹은 Render Static Site, API는 Render Free Web Service(Singapore)다.
@@ -14,11 +16,13 @@
 
 macOS의 바탕화면 `TwelveWeek.command`는 이제 운영 URL을 연다. 기존 실행 파일과 DB 백업은 `~/.local/share/twelveweek/backups/2026-10-28/`에 보관했다. 개발 서버를 띄울 때는 저장소의 `scripts/local-start.command`를 직접 실행한다.
 
-## 개인 접속과 비밀값
+## 이름과 비밀번호 인증
 
-새 기기는 개인 접속키를 확인한 뒤 기존 프로필을 선택한다. 이후에는 기존 장기 세션을 사용하며 새로고침 시 주기·주차·화면을 복원한다. 접속키 원문은 브라우저 저장소에 보관하지 않고 서버에는 SHA-256 digest만 설정한다. 접속키 없이 프로필 목록·생성·신규 세션을 요청하면 거부하며 반복 실패를 제한한다. 상태 확인용 `/api/health`는 공개다.
+2026-10-28 후속 요청으로 사이트 공통 접속키를 제거하고 사용자별 이름·비밀번호 인증으로 전환한다. 이름을 선택하면 비밀번호 입력 창이 열리고, 확인된 경우에만 기존 장기 세션을 발급한다. 로그인한 뒤에는 새로고침 시 주기·주차·화면을 복원한다. 새 사용자는 자신의 비밀번호를 설정하며, 비밀번호 변경에서는 현재 비밀번호를 확인하고 다른 기기의 로그인 세션을 만료한다. 비밀번호 입력 실패는 횟수를 제한한다. 이름 목록과 상태 확인용 `/api/health`는 공개다.
 
-접속키와 DB 접속 설정/CA는 맥북의 `~/.config/twelveweek/`에 권한을 제한해 보관한다. 비밀값은 Git에 넣지 않는다. 이 구성은 개인용 출입 제한이며, 다중 사용자 서비스의 개별 계정 인증을 구현한 것은 아니다. 서버의 `AI_SECRETS_KEY`와 `CALENDAR_SECRETS_KEY`는 Render에서 생성한 안정된 값을 사용하며, 연결 정보가 생긴 후에는 임의로 교체하지 않는다.
+비밀번호는 [OWASP의 scrypt 구성](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)을 사용하며 사용자별 무작위 salt와 함께 해시로 저장한다. 기존 사용자 초기화는 migration `007_profile_password`에서 한 번만 수행한다. 업그레이드 시 승인된 초기 비밀번호를 `INITIAL_PROFILE_PASSWORD` 또는 migration 함수의 별도 옵션으로 전달해야 하며, 소스에 운영 초기값을 기록하지 않는다. 기존 이름·ID·목표·실행·평가와 로그인 세션은 보존하고 재시작 시 비밀번호를 재설정하지 않는다.
+
+DB 접속 설정/CA는 맥북의 `~/.config/twelveweek/`에 권한을 제한해 보관한다. 이 폴더의 예전 `private-access-key.txt`/`private-access.env`는 이전 방식의 보존 자료이며 새 인증에서는 사용하지 않는다. 비밀값은 Git에 넣지 않는다. 서버의 `AI_SECRETS_KEY`와 `CALENDAR_SECRETS_KEY`는 Render에서 생성한 안정된 값을 사용하며, 연결 정보가 생긴 후에는 임의로 교체하지 않는다.
 
 맥북의 Codex 로그인·로컬 대화 재개 기능은 운영 서버에서 사용할 수 없다. 저장한 대화 자체는 보존했고, 별도의 AI API 연결 기능과 구분한다.
 
