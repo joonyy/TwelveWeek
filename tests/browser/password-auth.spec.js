@@ -17,7 +17,7 @@ test("profile selection asks for a password, handles failure, and restores a ses
   await expect(
     page.getByRole("button", { name: "첫 12주 작성하기" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "유저 전환", exact: true }).click();
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(name) }).click();
   await expect(page.getByLabel("비밀번호", { exact: true })).toBeFocused();
   await page.getByLabel("비밀번호", { exact: true }).fill("wrong-password");
@@ -73,7 +73,7 @@ test("password change validates confirmation and current password, and the new p
   await page.getByLabel("현재 비밀번호", { exact: true }).fill("test-password");
   await page.getByRole("button", { name: "비밀번호 저장" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "유저 전환", exact: true }).click();
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(name) }).click();
   await page.getByLabel("비밀번호", { exact: true }).fill("new-password");
   await page.getByRole("button", { name: "로그인", exact: true }).click();

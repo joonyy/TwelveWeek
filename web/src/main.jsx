@@ -31,6 +31,13 @@ import {
 } from "lucide-react";
 import { api, token } from "./api.js";
 import {
+  activateSession,
+  rememberedSession,
+  selectAnotherProfile,
+  forgetCurrentSession,
+  forgetRememberedSession,
+} from "./sessions.js";
+import {
   readNavigation,
   writeNavigation,
   clearNavigation,
@@ -296,7 +303,7 @@ function App() {
       setError(e.message);
       if (e.status === 401) {
         navigationEpoch.current++;
-        localStorage.removeItem("twelve.token");
+        forgetCurrentSession(profile?.id);
         clearNavigation();
         setRestoreError("");
         setProfile(null);
@@ -310,9 +317,11 @@ function App() {
   }
   useEffect(() => {
     (async () => {
-      if (token()) {
+      const existingToken = token();
+      if (existingToken) {
         await run(async () => {
-          const me = await api("/me");
+          const me = await api("/me", { authToken: existingToken });
+          activateSession({ token: existingToken, profile: me.profile });
           setProfile(me.profile);
           const saved = readNavigation();
           if (saved.cycle && !connectionRequest()) {
@@ -360,14 +369,26 @@ function App() {
   const logout = () => {
     navigationEpoch.current++;
     return run(async () => {
-      await api("/sessions/current", { method: "DELETE" });
-      localStorage.removeItem("twelve.token");
-      clearNavigation();
-      setRestoreError("");
-      setProfile(null);
-      setCycle(null);
-      setPasswordSettings(false);
+      try {
+        await api("/sessions/current", { method: "DELETE" });
+      } finally {
+        forgetCurrentSession(profile?.id);
+        clearNavigation();
+        setRestoreError("");
+        setProfile(null);
+        setCycle(null);
+        setPasswordSettings(false);
+      }
     });
+  };
+  const switchProfile = () => {
+    navigationEpoch.current++;
+    selectAnotherProfile();
+    clearNavigation();
+    setRestoreError("");
+    setProfile(null);
+    setCycle(null);
+    setPasswordSettings(false);
   };
   if (!ready) return <div className="loading">나의 12주를 불러오는 중…</div>;
   return (
@@ -463,9 +484,16 @@ function App() {
                   <KeyRound size={15} />
                   계정 설정
                 </button>
-                <button className="logout" onClick={() => navigate(logout)}>
+                <button
+                  className="logout"
+                  onClick={() => navigate(switchProfile)}
+                >
                   <LogOut size={15} />
                   유저 전환
+                </button>
+                <button className="logout" onClick={() => navigate(logout)}>
+                  <LogOut size={15} />
+                  로그아웃
                 </button>
               </>
             )}
@@ -560,7 +588,7 @@ function App() {
           notify={setNotice}
           onDeleted={() => {
             navigationEpoch.current++;
-            localStorage.removeItem("twelve.token");
+            forgetCurrentSession(profile.id);
             clearNavigation();
             setRestoreError("");
             setEditing(false);
@@ -626,7 +654,7 @@ function Entry({ onLogin, run, busy }) {
           method: "POST",
           body: { profileId: selected.id, password },
         });
-        localStorage.setItem("twelve.token", session.token);
+        activateSession(session);
         setPassword("");
         onLogin(session.profile);
       } catch (e) {
@@ -647,9 +675,34 @@ function Entry({ onLogin, run, busy }) {
         method: "POST",
         body: { profileId: p.id, password: newPassword },
       });
-      localStorage.setItem("twelve.token", s.token);
+      activateSession(s);
       setNewPassword("");
       onLogin(s.profile);
+    });
+  };
+  const chooseProfile = (p) => {
+    setPassword("");
+    setLoginError("");
+    const saved = rememberedSession(p.id);
+    if (!saved) {
+      setSelected(p);
+      return;
+    }
+    run(async () => {
+      try {
+        const me = await api("/me", { authToken: saved.token });
+        if (me.profile.id !== p.id) {
+          forgetRememberedSession(p.id);
+          setSelected(p);
+          return;
+        }
+        activateSession({ ...saved, profile: me.profile });
+        onLogin(me.profile);
+      } catch (e) {
+        if (e.status !== 401) throw e;
+        forgetRememberedSession(p.id);
+        setSelected(p);
+      }
     });
   };
   return (
@@ -701,7 +754,7 @@ function Entry({ onLogin, run, busy }) {
           <>
             <h2>유저를 선택하세요.</h2>
             <p className="muted">
-              이름을 선택하고 비밀번호로 이어서 시작합니다.
+              이름을 선택하세요. 이 기기에서 로그인한 계정은 바로 이어집니다.
             </p>
             {profiles.length > 0 && (
               <div className="profile-list">
@@ -709,14 +762,15 @@ function Entry({ onLogin, run, busy }) {
                   <button
                     disabled={busy}
                     key={p.id}
-                    onClick={() => {
-                      setSelected(p);
-                      setPassword("");
-                      setLoginError("");
-                    }}
+                    onClick={() => chooseProfile(p)}
                   >
                     <span className="avatar">{p.name.slice(0, 1)}</span>
-                    <strong>{p.name}</strong>
+                    <span className="profile-choice-name">
+                      <strong>{p.name}</strong>
+                      {rememberedSession(p.id) && (
+                        <small>이 기기에 로그인됨</small>
+                      )}
+                    </span>
                     <ArrowRight size={18} />
                   </button>
                 ))}
@@ -752,7 +806,9 @@ function Entry({ onLogin, run, busy }) {
               </Button>
             </form>
             <p className="footnote">
-              비밀번호로 로그인하면 이 기기에서는 기본 365일 동안 유지됩니다.
+              로그인은 이 브라우저에서 기본 365일 유지됩니다. 공용 기기에서는
+              사용 후 로그아웃하세요. 다른 기기·브라우저는 첫 로그인 때
+              비밀번호가 필요합니다.
             </p>
           </>
         )}

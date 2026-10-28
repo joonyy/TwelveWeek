@@ -1,12 +1,16 @@
+import { currentToken } from "./sessions.js";
 const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export function token() {
-  return localStorage.getItem("twelve.token");
+  return currentToken();
 }
-export async function api(path, { method = "GET", body, blob = false } = {}) {
+export async function api(
+  path,
+  { method = "GET", body, blob = false, authToken = token() } = {},
+) {
   const response = await fetch(`${base}/api${path}`, {
     method,
     headers: {
-      ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

@@ -522,6 +522,15 @@ main {
 .profile-list svg {
   margin-left: auto;
 }
+.profile-choice-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.profile-choice-name small {
+  color: var(--muted);
+  font-size: 10px;
+}
 .cycles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
