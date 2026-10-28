@@ -51,9 +51,7 @@ test("password change validates confirmation and current password, and the new p
   await page.getByLabel("새 유저 이름").fill(name);
   await page.getByLabel("새 유저 비밀번호").fill("test-password");
   await page.getByRole("button", { name: "나의 공간 만들기" }).click();
-  await page
-    .getByRole("button", { name: "비밀번호 변경", exact: true })
-    .click();
+  await page.getByRole("button", { name: "계정 설정", exact: true }).click();
   await page
     .getByLabel("현재 비밀번호", { exact: true })
     .fill("wrong-password");

@@ -431,7 +431,7 @@ function App() {
                   onClick={() => setPasswordSettings(true)}
                 >
                   <KeyRound size={15} />
-                  비밀번호 변경
+                  계정 설정
                 </button>
                 <button className="logout" onClick={() => navigate(logout)}>
                   <LogOut size={15} />
@@ -522,11 +522,23 @@ function App() {
       )}
       {busy && <div className="busy-line" />}
       {passwordSettings && profile && (
-        <PasswordSettings
+        <AccountSettings
+          profile={profile}
           run={run}
           busy={busy}
           onClose={() => setPasswordSettings(false)}
           notify={setNotice}
+          onDeleted={() => {
+            navigationEpoch.current++;
+            localStorage.removeItem("twelve.token");
+            clearNavigation();
+            setRestoreError("");
+            setEditing(false);
+            setProfile(null);
+            setCycle(null);
+            setPasswordSettings(false);
+            setNotice("계정과 저장된 기록을 삭제했어요.");
+          }}
         />
       )}
       {principles && (
@@ -751,11 +763,16 @@ function Entry({ onLogin, run, busy }) {
   );
 }
 
-function PasswordSettings({ run, busy, onClose, notify }) {
+function AccountSettings({ profile, run, busy, onClose, notify, onDeleted }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deletionPassword, setDeletionPassword] = useState("");
+  const [confirmationName, setConfirmationName] = useState("");
+  const [deletionAcknowledged, setDeletionAcknowledged] = useState(false);
+  const [deletionError, setDeletionError] = useState("");
   const save = (e) => {
     e.preventDefault();
     setError("");
@@ -772,54 +789,159 @@ function PasswordSettings({ run, busy, onClose, notify }) {
         onClose();
         notify("비밀번호를 변경했어요.");
       } catch (e) {
+        if (e.status === 401) throw e;
         setError(e.message);
       }
     });
   };
+  const deleteAccount = (e) => {
+    e.preventDefault();
+    if (!deletionAcknowledged || busy) return;
+    setDeletionError("");
+    run(async () => {
+      try {
+        await api("/me", {
+          method: "DELETE",
+          body: { currentPassword: deletionPassword, confirmationName },
+        });
+        onDeleted();
+      } catch (e) {
+        if (e.status === 401) throw e;
+        setDeletionError(e.message);
+      }
+    });
+  };
   return (
-    <Modal title="비밀번호 변경" onClose={onClose}>
-      <form onSubmit={save}>
-        <Field
-          label="현재 비밀번호"
-          type="password"
-          autoComplete="current-password"
-          required
-          maxLength={128}
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-        />
-        <Field
-          label="새 비밀번호"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={4}
-          maxLength={128}
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-        />
-        <Field
-          label="새 비밀번호 확인"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={4}
-          maxLength={128}
-          value={confirmation}
-          onChange={(e) => setConfirmation(e.target.value)}
-        />
-        {error && (
-          <p role="alert" className="error">
-            {error}
+    <Modal title="계정 설정" onClose={() => !busy && onClose()}>
+      <p>
+        <strong>{profile.name}</strong>님의 계정
+      </p>
+      <section aria-label="비밀번호 재설정">
+        <h3>비밀번호 재설정</h3>
+        <form onSubmit={save}>
+          <Field
+            label="현재 비밀번호"
+            type="password"
+            autoComplete="current-password"
+            required
+            maxLength={128}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+          <Field
+            label="새 비밀번호"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={4}
+            maxLength={128}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <Field
+            label="새 비밀번호 확인"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={4}
+            maxLength={128}
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+          />
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <p className="footnote">
+            변경 후 다른 기기에서는 새 비밀번호로 다시 로그인해주세요.
           </p>
-        )}
-        <p className="footnote">
-          변경 후 다른 기기에서는 새 비밀번호로 다시 로그인해주세요.
+          <Button type="submit" disabled={busy}>
+            비밀번호 저장 <Check size={18} />
+          </Button>
+        </form>
+      </section>
+      <section className="account-danger-zone" aria-label="계정 삭제">
+        <h3>계정 삭제</h3>
+        <p>
+          이 계정의 모든 주기·비전·목표·전술·실행·평가·독서 기록·AI 대화와
+          저장된 연결 정보를 삭제합니다. 모든 기기에서 로그아웃되며 앱에서
+          복구할 수 없습니다. 다른 사용자의 계정은 삭제되지 않습니다.
         </p>
-        <Button type="submit" disabled={busy}>
-          비밀번호 저장 <Check size={18} />
-        </Button>
-      </form>
+        <p className="footnote">
+          외부 캘린더나 블로그에 이미 보낸 내용은 삭제되지 않습니다.
+        </p>
+        {!deleting ? (
+          <Button
+            variant="danger"
+            disabled={busy}
+            onClick={() => setDeleting(true)}
+          >
+            계정 삭제 진행 <Trash2 size={17} />
+          </Button>
+        ) : (
+          <form onSubmit={deleteAccount}>
+            <Field
+              label="삭제 확인 이름"
+              hint={`현재 계정 이름 ‘${profile.name}’을 입력해주세요.`}
+              value={confirmationName}
+              onChange={(e) => setConfirmationName(e.target.value)}
+              autoComplete="off"
+              autoFocus
+              required
+              maxLength={32}
+            />
+            <Field
+              label="계정 삭제용 현재 비밀번호"
+              type="password"
+              autoComplete="current-password"
+              value={deletionPassword}
+              onChange={(e) => setDeletionPassword(e.target.value)}
+              required
+              maxLength={128}
+            />
+            <label className="account-deletion-consent">
+              <input
+                type="checkbox"
+                checked={deletionAcknowledged}
+                onChange={(e) => setDeletionAcknowledged(e.target.checked)}
+              />
+              계정과 모든 기록이 삭제되고 앱에서 복구할 수 없음을 확인했습니다.
+            </label>
+            {deletionError && (
+              <p role="alert" className="error">
+                {deletionError}
+              </p>
+            )}
+            <Button
+              variant="danger"
+              type="submit"
+              disabled={
+                busy ||
+                !deletionAcknowledged ||
+                !deletionPassword ||
+                confirmationName.normalize("NFKC").trim() !== profile.name
+              }
+            >
+              계정과 모든 기록 영구 삭제 <Trash2 size={17} />
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                setDeleting(false);
+                setDeletionPassword("");
+                setConfirmationName("");
+                setDeletionAcknowledged(false);
+                setDeletionError("");
+              }}
+            >
+              삭제 취소
+            </Button>
+          </form>
+        )}
+      </section>
     </Modal>
   );
 }

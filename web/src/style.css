@@ -1440,6 +1440,37 @@ main {
 .modal > p {
   font-size: 13px;
 }
+.account-danger-zone {
+  border-top: 1px solid #d9c4bb;
+  margin-top: 28px;
+  padding-top: 18px;
+}
+.account-danger-zone h3 {
+  color: #93523b;
+}
+.account-danger-zone p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.account-danger-zone .button.danger {
+  color: #8d3926;
+  border-color: #d8b3a7;
+  background: #fff1eb;
+}
+.account-deletion-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-deletion-consent input {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin-top: 3px;
+}
 .principle-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
