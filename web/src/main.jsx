@@ -89,6 +89,7 @@ import PlanTimeline from "./PlanTimeline.jsx";
 import { ReadingNotebook, ReadingRecordModal } from "./ReadingNotes.jsx";
 import GoalReferenceLink from "./GoalReferenceLink.jsx";
 const CalendarMergePlanner = lazy(() => import("./CalendarMergePlanner.jsx"));
+const CalendarImport = lazy(() => import("./CalendarImport.jsx"));
 import { updateVision } from "../../shared/vision-links.js";
 import {
   VisionReference,
@@ -2411,6 +2412,8 @@ function Execution(props) {
   );
 }
 function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const [calendarImport, setCalendarImport] = useState(null);
+  const [calendarImportBusy, setCalendarImportBusy] = useState(false);
   const [initialNavigation] = useState(() => readNavigation(cycle.id));
   const weekCount = cycleWeeks(cycle),
     reviewNumber = weekCount + 1;
@@ -2863,6 +2866,14 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
     });
   const start = weekStart(cycle.start_date, number),
     today = week?.today;
+  const openCalendarImport = () => {
+    if (modelDirty) {
+      notify("작성 중인 시간표를 먼저 저장하거나 변경을 취소해주세요.");
+      return;
+    }
+    if (busy || !canEditModel) return;
+    setCalendarImport({ cycle, week });
+  };
   const weekModelEditor = modelEdit && week && canEditModel && (
     <section
       className="panel week-model-editor"
@@ -3164,6 +3175,8 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
               scheduleReadonly={!canEditModel}
               onSchedule={setSchedule}
               onCalendar={() => chooseMode("schedule")}
+              onImportCalendar={openCalendarImport}
+              importDisabled={busy || !canEditModel}
             />
           )}
           {modelEdit && mode !== "plan" && weekModelEditor}
@@ -3387,6 +3400,13 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   </p>
                 </div>
                 <div className="week-model-actions">
+                  <Button
+                    variant="outlined"
+                    disabled={busy || !canEditModel}
+                    onClick={openCalendarImport}
+                  >
+                    캘린더 가져오기
+                  </Button>
                   <Button
                     variant="outlined"
                     disabled={busy || !canEditModel}
@@ -3762,6 +3782,35 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
             />
           )}
         </>
+      )}
+      {calendarImport && (
+        <Modal
+          title={`${calendarImport.week.number}주차 캘린더 가져오기`}
+          className="calendar-merge-modal"
+          onClose={() => {
+            if (!calendarImportBusy) setCalendarImport(null);
+          }}
+        >
+          <Suspense
+            fallback={<p className="loading">캘린더 가져오기를 준비하는 중…</p>}
+          >
+            <CalendarImport
+              cycle={calendarImport.cycle}
+              week={calendarImport.week}
+              onBusy={setCalendarImportBusy}
+              onApplied={(fresh, result) => {
+                setModelEdit(null);
+                setCalendarImport(null);
+                setCycle(fresh);
+                notify(
+                  result.imported != null
+                    ? `일정 ${result.imported}개를 ${calendarImport.week.number}주차에 추가했어요.`
+                    : `새 일정 ${result.created}개와 기존 일정 연결 ${result.linked}개를 반영했어요.`,
+                );
+              }}
+            />
+          </Suspense>
+        </Modal>
       )}
     </>
   );

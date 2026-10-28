@@ -5,6 +5,51 @@
 .calendar-merge {
   min-width: 0;
 }
+.calendar-import-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+.calendar-import > p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.calendar-import-events {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 20px 0;
+}
+.calendar-import-event {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid #dce5d3;
+  border-radius: 8px;
+}
+.calendar-import-event input,
+.calendar-import .calendar-merge-message input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+.calendar-import-event strong,
+.calendar-import-event small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.calendar-import-event small {
+  margin-top: 5px;
+  color: #718169;
+}
+.calendar-import > .button {
+  margin-top: 20px;
+  max-width: 100%;
+  white-space: normal;
+}
 .calendar-merge > p {
   font-size: 13px;
   line-height: 1.8;

@@ -31,6 +31,8 @@ export default function CurrentWeekPlan({
   scheduleReadonly,
   onSchedule,
   onCalendar,
+  onImportCalendar,
+  importDisabled,
   timetable,
   timetableSource,
   editingTimetable,
@@ -99,10 +101,24 @@ export default function CurrentWeekPlan({
             전술 {tactics.length}개 · 실행 {occurrences.length}회
           </p>
         </div>
-        <button type="button" className="button outlined" onClick={onCalendar}>
-          <CalendarDays size={16} />
-          주간 일정으로 보기
-        </button>
+        <div className="week-model-actions">
+          <button
+            type="button"
+            className="button outlined"
+            disabled={importDisabled}
+            onClick={onImportCalendar}
+          >
+            캘린더 가져오기
+          </button>
+          <button
+            type="button"
+            className="button outlined"
+            onClick={onCalendar}
+          >
+            <CalendarDays size={16} />
+            주간 일정으로 보기
+          </button>
+        </div>
       </header>
       <section
         className="panel current-week-actions"
