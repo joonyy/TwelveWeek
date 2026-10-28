@@ -157,6 +157,7 @@ function Guide({ ids }) {
 }
 function Modal({ title, children, onClose, className = "" }) {
   const container = useRef(null);
+  const backdropGesture = useRef(null);
   useEffect(() => {
     const previous = document.activeElement;
     const initial =
@@ -198,8 +199,37 @@ function Modal({ title, children, onClose, className = "" }) {
   return (
     <div
       className="modal-backdrop"
+      onPointerDownCapture={(e) => {
+        backdropGesture.current =
+          e.isPrimary && e.button === 0
+            ? {
+                pointerId: e.pointerId,
+                startedOutside: e.target === e.currentTarget,
+                endedOutside: false,
+              }
+            : null;
+      }}
+      onPointerUpCapture={(e) => {
+        const gesture = backdropGesture.current;
+        if (gesture?.pointerId === e.pointerId)
+          gesture.endedOutside =
+            e.target === e.currentTarget &&
+            document.elementFromPoint(e.clientX, e.clientY) === e.currentTarget;
+      }}
+      onPointerCancelCapture={() => {
+        backdropGesture.current = null;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        // Dragging text can synthesize a click on the common ancestor (the
+        // backdrop). Dismiss only when both ends of this gesture were outside.
+        const gesture = backdropGesture.current;
+        backdropGesture.current = null;
+        if (
+          gesture?.startedOutside &&
+          gesture.endedOutside &&
+          e.target === e.currentTarget
+        )
+          onClose();
       }}
     >
       <section
