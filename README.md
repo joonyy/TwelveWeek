@@ -68,6 +68,14 @@ GitHub 저장소는 [joonyy/TwelveWeek](https://github.com/joonyy/TwelveWeek)다
 
 외부 cron에서 `node scripts/keepalive.js`를 실행하거나, GitHub repository variable `KEEPALIVE_URLS`를 설정해 준비한 10분 간격 workflow를 활성화한다. 변수 미설정 시 작업은 건너뛴다. GitHub의 예약 작업은 지연될 수 있으며 전용 유료 Render Cron Job은 생성하지 않았다. 개인 저장소에서 사용할 Actions 실행량은 실제 배포 시 확인한다.
 
+## 푸시 후 자동 배포
+
+`main`에 push하면 `.github/workflows/check.yml`이 단위·PostgreSQL API·Chromium·빌드를 검사하고, 성공한 커밋 SHA를 Render API·웹의 Deploy Hook으로 전달한다. PR과 `dev`는 검사만 한다. 배포 직전에 현재 `main`과 SHA를 대조해 더 최신 커밋이 있으면 오래된 배포는 건너뛴다. 배포 요청은 동시에 여러 workflow가 보내지 않도록 직렬화한다.
+
+GitHub Actions repository secrets에 `RENDER_API_DEPLOY_HOOK`, `RENDER_WEB_DEPLOY_HOOK`을 각각 등록한다. Render의 해당 서비스 Settings → Deploy Hook 값을 사용하며 소스·로그·문서에 실제 URL을 기록하지 않는다. Render 자체 Auto-Deploy는 두 서비스 모두 Off로 두고 `render.yaml`에도 동일하게 설정한다. 계정 전체 권한의 Render API 키는 필요하지 않다.
+
+Actions의 배포 단계 성공은 요청 접수이며 실제 빌드·Live 전환은 Render에서 확인한다. 응답이 불확실한 POST를 자동 재시도하지 않는다. 오류가 나면 Render의 배포 목록을 확인한 뒤 필요한 경우 Actions의 실패한 작업만 재실행한다. 공개 저장소의 표준 GitHub runner는 무료이며, Render는 기존 Free API·Static Site를 사용하므로 무료 한도 안에서 추가 요금제 없이 운영할 수 있다. Render의 월 빌드/트래픽/실행 시간 한도는 그대로 적용된다. [GitHub 비용](https://docs.github.com/en/actions/concepts/billing-and-usage), [Render Deploy Hook](https://render.com/docs/deploy-hooks), [Render 무료 범위](https://render.com/docs/free).
+
 ## 이번 주로 캘린더 파일 가져오기
 
 **실행과 평가 → 이번 주 계획표 / 주간 일정 → 캘린더 가져오기**에서 `.ics` 파일을 읽는다. Mac 캘린더 왼쪽에서 해당 캘린더를 선택하고 **파일 → 내보내기 → 내보내기**로 저장하면 ‘나의 Mac’ 일정도 사용할 수 있다. [Apple 안내](https://support.apple.com/guide/calendar/icl1023/mac).

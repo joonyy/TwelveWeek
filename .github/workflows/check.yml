@@ -3,6 +3,8 @@ on:
   pull_request:
   push:
     branches: [main, dev]
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -37,3 +39,35 @@ jobs:
         with:
           name: browser-failure
           path: test-results
+  deploy:
+    name: Deploy tested main commit to Render
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: render-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Skip an outdated commit
+        id: current
+        shell: bash
+        run: |
+          remote_sha=$(git ls-remote origin refs/heads/main | cut -f1)
+          test -n "$remote_sha"
+          if [ "$remote_sha" = "$GITHUB_SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "A newer main commit exists; skipping this deployment." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Request API and web deploys for the verified SHA
+        if: steps.current.outputs.deploy == 'true'
+        run: node scripts/render-deploy.js
+        env:
+          RENDER_API_DEPLOY_HOOK: ${{ secrets.RENDER_API_DEPLOY_HOOK }}
+          RENDER_WEB_DEPLOY_HOOK: ${{ secrets.RENDER_WEB_DEPLOY_HOOK }}

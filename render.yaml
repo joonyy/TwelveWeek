@@ -4,6 +4,7 @@ services:
   - type: web
     name: twelveweek-joonyy-api
     runtime: node
+    autoDeployTrigger: "off"
     region: singapore
     plan: free
     buildCommand: npm ci --omit=dev
@@ -35,6 +36,7 @@ services:
   - type: web
     name: twelveweek-joonyy
     runtime: static
+    autoDeployTrigger: "off"
     buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: ./web/dist
     envVars:

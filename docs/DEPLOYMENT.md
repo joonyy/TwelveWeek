@@ -43,7 +43,9 @@ DB 접속 설정/CA는 맥북의 `~/.config/twelveweek/`에 권한을 제한해 
 
 GitHub repository variable `KEEPALIVE_URLS`에 API 상태 URL을 설정해 기존 10분 간격 Actions workflow를 활성화했다. 첫 수동 실행이 성공했다. 예약 실행은 지연될 수 있고, 무료 서버의 월 한도와 재시작을 없애는 기능은 아니다.
 
-Render Blueprint는 `render.yaml`을 사용한다. 공개 저장소 URL로 연결했으며 GitHub 계정에 추가 저장소 권한을 부여하지 않았다. API Settings의 Auto-Deploy 표시는 `On Commit`이다. 코드 변경 후에는 새 commit SHA가 실제로 배포됐는지 확인하고, 반영되지 않았다면 Manual Deploy/Blueprint Manual sync를 사용한다. GitHub CI 성공만으로 운영 배포 완료를 판단하지 않는다.
+Render Blueprint는 `render.yaml`을 사용한다. 공개 저장소 URL로 연결했다. 2026-10-28 후속 요청으로 API·웹의 Render 자체 Auto-Deploy를 모두 Off로 바꾸고, GitHub repository secrets에 서비스별 Deploy Hook 두 개를 등록했다. 실제 훅 값은 저장소에 넣지 않는다. `.github/workflows/check.yml`에서 `main` push의 전체 검증이 성공한 뒤 `deploy` 작업이 검사한 SHA를 두 훅에 전달한다. PR/`dev`·실패한 검사에서는 배포하지 않으며 오래된 `main` 커밋도 건너뛴다. Render API 계정 키나 유료 runner는 사용하지 않는다.
+
+Actions deploy 단계의 성공은 요청 접수이므로 최종 Live 및 소스 SHA는 Render 배포 목록에서 확인한다. 응답이 불확실하면 목록을 확인한 뒤 실패 작업을 재실행한다. 기존 Manual Deploy는 비상용으로 남아 있다. 실제 첫 자동 배포 결과는 아래 검증 기록을 따른다.
 
 ## 공통 팝업·로그인 기억 확인 결과
 
