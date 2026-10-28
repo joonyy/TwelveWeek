@@ -536,6 +536,25 @@ main {
   color: var(--ink);
   max-width: 500px;
 }
+.cycle-list-item {
+  max-width: 500px;
+  min-width: 0;
+}
+.cycle-list-item .cycle-card {
+  width: 100%;
+}
+.cycle-delete-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 10px 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid #dfcec7;
+  border-radius: 7px;
+  background: #fff9f6;
+  font-size: 12px;
+}
 .cycle-card:hover {
   border-color: #9aba8b;
 }

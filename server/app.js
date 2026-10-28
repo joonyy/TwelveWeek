@@ -31,7 +31,7 @@ import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
 import { mountExecutionTacticRoutes } from "./execution-tactics.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
-import { deleteProfileData } from "./accounts.js";
+import { deleteProfileData, deleteCycleData } from "./accounts.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -347,6 +347,27 @@ export function createApp({
   app.get("/api/cycles/:cycleId", async (req, res) =>
     res.json(await owned(pool, req)),
   );
+  app.delete("/api/cycles/:cycleId", async (req, res) => {
+    const input = z
+      .object({ version: z.number().int().min(0) })
+      .parse(req.body);
+    await transaction(pool, async (db) => {
+      const cycle = await owned(db, req, true);
+      version(cycle.version, input.version);
+      if (cycle.status !== "draft")
+        fail(409, "실행 중이거나 마친 주기는 삭제할 수 없어요.");
+      if (
+        (
+          await db.query("SELECT 1 FROM weeks WHERE cycle_id=$1 LIMIT 1", [
+            cycle.id,
+          ])
+        ).rowCount
+      )
+        fail(409, "실행 기록이 있는 초안은 삭제할 수 없어요.");
+      await deleteCycleData(db, cycle.id);
+    });
+    res.status(204).end();
+  });
   app.get("/api/cycles/:cycleId/reading-notes", async (req, res) => {
     const cycle = await owned(pool, req);
     const weeks = (

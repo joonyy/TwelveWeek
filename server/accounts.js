@@ -25,3 +25,11 @@ export async function deleteProfileData(db, profileId) {
   await db.query("DELETE FROM profiles WHERE id=$1", [profileId]);
   return true;
 }
+
+// Caller checks ownership, lifecycle and version while holding the cycle lock.
+export async function deleteCycleData(db, cycleId) {
+  await db.query("DELETE FROM ai_vision_edits WHERE cycle_id=$1", [cycleId]);
+  await db.query("DELETE FROM changes WHERE cycle_id=$1", [cycleId]);
+  // Other cycle-owned rows use ON DELETE CASCADE. Profile credentials stay.
+  await db.query("DELETE FROM cycles WHERE id=$1", [cycleId]);
+}

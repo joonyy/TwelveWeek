@@ -952,6 +952,8 @@ function CycleList({ open, run, busy, onCreated }) {
     [title, setTitle] = useState("나의 첫 12주"),
     [start, setStart] = useState(DEFAULT_START),
     [weekCount, setWeekCount] = useState(DEFAULT_WEEK_COUNT);
+  const [deletingCycle, setDeletingCycle] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     run(async () => setList(await api("/cycles")));
   }, []);
@@ -964,6 +966,25 @@ function CycleList({ open, run, busy, onCreated }) {
           body: { title, startDate: start, weekCount },
         }),
       );
+    });
+  };
+  const removeDraft = () => {
+    if (!deletingCycle || busy) return;
+    setDeleteError("");
+    run(async () => {
+      try {
+        await api(`/cycles/${deletingCycle.id}`, {
+          method: "DELETE",
+          body: { version: deletingCycle.version },
+        });
+        setList((previous) =>
+          previous.filter((c) => c.id !== deletingCycle.id),
+        );
+        setDeletingCycle(null);
+      } catch (e) {
+        if (e.status === 401) throw e;
+        setDeleteError(e.message);
+      }
     });
   };
   return (
@@ -981,41 +1002,59 @@ function CycleList({ open, run, busy, onCreated }) {
       <Guide ids={["vision", "moment"]} />
       <div className="cycles">
         {list.map((c) => (
-          <button className="cycle-card" key={c.id} onClick={() => open(c.id)}>
-            <span className={`pill ${c.status}`}>
-              {
-                { draft: "작성 중", active: "실행 중", complete: "마침" }[
-                  c.status
-                ]
-              }
-            </span>
-            <h2>{c.title}</h2>
-            <p>
-              {c.start_date} — {addDays(c.start_date, cycleWeeks(c) * 7 - 1)} ·{" "}
-              {cycleWeeks(c)}주 실행
-            </p>
-            <div className="mini-weeks">
-              {Array.from({ length: cycleWeeks(c) }, (_, i) => (
-                <i
-                  key={i}
-                  className={
-                    c.status !== "draft" &&
-                    i < currentWeek(c.start_date, new Date(), cycleWeeks(c))
-                      ? "filled"
-                      : ""
-                  }
-                />
-              ))}
-            </div>
-            <footer>
-              <span>
-                {c.status === "draft"
-                  ? "비전과 계획 이어 쓰기"
-                  : "실행과 평가 살펴보기"}
+          <article
+            className="cycle-list-item"
+            key={c.id}
+            aria-label={`${c.title} · ${c.start_date}`}
+          >
+            <button className="cycle-card" onClick={() => open(c.id)}>
+              <span className={`pill ${c.status}`}>
+                {
+                  { draft: "작성 중", active: "실행 중", complete: "마침" }[
+                    c.status
+                  ]
+                }
               </span>
-              <ArrowUpRight size={20} />
-            </footer>
-          </button>
+              <h2>{c.title}</h2>
+              <p>
+                {c.start_date} — {addDays(c.start_date, cycleWeeks(c) * 7 - 1)}{" "}
+                · {cycleWeeks(c)}주 실행
+              </p>
+              <div className="mini-weeks">
+                {Array.from({ length: cycleWeeks(c) }, (_, i) => (
+                  <i
+                    key={i}
+                    className={
+                      c.status !== "draft" &&
+                      i < currentWeek(c.start_date, new Date(), cycleWeeks(c))
+                        ? "filled"
+                        : ""
+                    }
+                  />
+                ))}
+              </div>
+              <footer>
+                <span>
+                  {c.status === "draft"
+                    ? "비전과 계획 이어 쓰기"
+                    : "실행과 평가 살펴보기"}
+                </span>
+                <ArrowUpRight size={20} />
+              </footer>
+            </button>
+            {c.status === "draft" && (
+              <button
+                className="cycle-delete-button danger"
+                disabled={busy}
+                onClick={() => {
+                  setDeleteError("");
+                  setDeletingCycle(c);
+                }}
+              >
+                <Trash2 size={15} /> 초안 삭제
+              </button>
+            )}
+          </article>
         ))}
         {!list.length && (
           <div className="empty-card">
@@ -1033,6 +1072,55 @@ function CycleList({ open, run, busy, onCreated }) {
           </div>
         )}
       </div>
+      {deletingCycle && (
+        <Modal
+          title="작성 중인 초안 삭제"
+          onClose={() => !busy && setDeletingCycle(null)}
+        >
+          <h3>{deletingCycle.title}</h3>
+          <p>
+            {deletingCycle.start_date} —{" "}
+            {addDays(
+              deletingCycle.start_date,
+              cycleWeeks(deletingCycle) * 7 - 1,
+            )}{" "}
+            · {cycleWeeks(deletingCycle)}주
+          </p>
+          <p>
+            이 초안에 작성한 비전·목표·계획·AI 대화를 삭제합니다. 앱에서 복구할
+            수 없습니다.
+          </p>
+          {deleteError && (
+            <p className="error" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <Button variant="danger" disabled={busy} onClick={removeDraft}>
+            이 초안 삭제
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => setDeletingCycle(null)}
+          >
+            취소
+          </Button>
+          {deleteError && (
+            <Button
+              variant="light"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  setList(await api("/cycles"));
+                  setDeletingCycle(null);
+                })
+              }
+            >
+              목록 새로고침
+            </Button>
+          )}
+        </Modal>
+      )}
       {creating && (
         <Modal title="새로운 12주" onClose={() => setCreating(false)}>
           <form onSubmit={create}>
