@@ -1,9 +1,9 @@
 # 개인용 운영 배포 · 2026-10-28
 
-**현재 진행 상태:** 2026-10-28 19:28 KST에 API·프론트 모두 `02f786e266d545be2c19380aee9f061bc7f2b7f8` 배포를 완료했다. 사이트 공통 접속키 대신 이름 선택·사용자별 비밀번호 로그인을 사용한다. 운영 DB는 migration `007_profile_password` 적용을 완료했으며 초기화를 다시 수행하지 않는다. 기존 계정 로그인, 잘못된 비밀번호 거부, 활성 10주 주기와 2주차 일간 화면의 새로고침 복원, 390px 화면을 실제 운영 URL에서 확인했다.
+**현재 진행 상태:** 2026-10-28 19:58 KST에 API·프론트 모두 `bc498fff2d710f753071504acf17ddb2b87cad62` 배포와 운영 검증을 완료했다. 이름 선택·사용자별 비밀번호 로그인에 이어 `계정 설정`의 비밀번호 재설정·계정 삭제, 작성 중인 카드의 초안 삭제를 제공한다. 운영 DB는 migration `007_profile_password` 적용을 완료했으며 초기화를 다시 수행하지 않는다. 이번 변경에 추가 schema migration은 없다.
 
-- API 배포: `dep-dbgss1ks728c73cabfbg` — Render `Deploy succeeded|Live`, 39.1초.
-- 웹 배포: `dep-dbgss3mc6qcc73cie0hg` — Render `Deploy succeeded|Live`, 26.3초.
+- API 배포: `dep-dbgt9rrl550s738605l0` — Render `Deploy succeeded|Live`, 54.9초.
+- 웹 배포: `dep-dbgt9url550s73860akg` — Render `Deploy succeeded|Live`, 18.1초.
 - 이후 문서만 변경한 commit은 운영 코드의 배포 SHA와 구분한다.
 
 - 웹: https://twelveweek-joonyy.onrender.com
@@ -24,6 +24,10 @@ macOS의 바탕화면 `TwelveWeek.command`는 이제 운영 URL을 연다. 기�
 
 2026-10-28 후속 요청으로 사이트 공통 접속키를 제거하고 사용자별 이름·비밀번호 인증으로 전환한다. 이름을 선택하면 비밀번호 입력 창이 열리고, 확인된 경우에만 기존 장기 세션을 발급한다. 로그인한 뒤에는 새로고침 시 주기·주차·화면을 복원한다. 새 사용자는 자신의 비밀번호를 설정하며, 비밀번호 변경에서는 현재 비밀번호를 확인하고 다른 기기의 로그인 세션을 만료한다. 비밀번호 입력 실패는 횟수를 제한한다. 이름 목록과 상태 확인용 `/api/health`는 공개다.
 
+사이드바 `계정 설정`에서 현재 비밀번호를 확인하고 새 비밀번호를 설정한다. 계정 삭제는 본인 이름·현재 비밀번호·삭제 확인을 거쳐 실행하며, 서버는 인증된 본인의 계정과 모든 소유 기록·세션·OAuth 승인·저장된 연결 정보만 한 트랜잭션으로 정리한다. 공유 OAuth 클라이언트 등록과 다른 계정은 보존한다. 외부 캘린더·블로그에 이미 내보낸 내용은 삭제하지 않는다. 비밀번호를 잊은 사용자를 위한 이메일 복구는 제공하지 않는다.
+
+`나의 12주`에서 작성 중인 카드 아래 `초안 삭제`로 제목·기간을 확인하고 삭제한다. 서버가 소유자·버전·미착수 상태를 다시 확인하고, 실행 기록이 있거나 이미 실행 중/완료인 주기는 거부한다. 변경된 초안은 목록을 새로 불러와 다시 확인한다.
+
 비밀번호는 [OWASP의 scrypt 구성](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)을 사용하며 사용자별 무작위 salt와 함께 해시로 저장한다. 기존 사용자 초기화는 migration `007_profile_password`에서 한 번만 수행한다. 업그레이드 시 승인된 초기 비밀번호를 `INITIAL_PROFILE_PASSWORD` 또는 migration 함수의 별도 옵션으로 전달해야 하며, 소스에 운영 초기값을 기록하지 않는다. 기존 이름·ID·목표·실행·평가와 로그인 세션은 보존하고 재시작 시 비밀번호를 재설정하지 않는다.
 
 DB 접속 설정/CA는 맥북의 `~/.config/twelveweek/`에 권한을 제한해 보관한다. 이 폴더의 예전 `private-access-key.txt`/`private-access.env`는 이전 방식의 보존 자료이며 새 인증에서는 사용하지 않는다. 비밀값은 Git에 넣지 않는다. 서버의 `AI_SECRETS_KEY`와 `CALENDAR_SECRETS_KEY`는 Render에서 생성한 안정된 값을 사용하며, 연결 정보가 생긴 후에는 임의로 교체하지 않는다.
@@ -36,7 +40,15 @@ GitHub repository variable `KEEPALIVE_URLS`에 API 상태 URL을 설정해 기�
 
 Render Blueprint는 `render.yaml`을 사용한다. 공개 저장소 URL로 연결했으며 GitHub 계정에 추가 저장소 권한을 부여하지 않았다. API Settings의 Auto-Deploy 표시는 `On Commit`이다. 코드 변경 후에는 새 commit SHA가 실제로 배포됐는지 확인하고, 반영되지 않았다면 Manual Deploy/Blueprint Manual sync를 사용한다. GitHub CI 성공만으로 운영 배포 완료를 판단하지 않는다.
 
-## 이름·비밀번호 전환 확인 결과
+## 계정 설정·초안 삭제 확인 결과 · 19:58 KST
+
+- [배포 코드 GitHub CI](https://github.com/joonyy/TwelveWeek/actions/runs/40675843604) 성공: 단위 58개·PostgreSQL API 56개·Chromium 46개·빌드.
+- 로컬 전체 검증(계정 기능), 이후 추가한 초안 삭제/로그인/화면 복원 관련 검증과 `git diff --check` 통과. 삭제 취소·실패 시 입력/기록 유지, 잘못된 이름/비밀번호·소유권·버전·생명주기 제한, 삭제 후 모든 세션 무효화와 다른 계정 보존을 확인했다.
+- 운영 임시 검증 계정으로 비밀번호 변경·이전 비밀번호 거부·다른 기기 세션 만료, 잘못된 삭제 비밀번호 거부, 초안 버전 보호와 삭제, 계정 및 잔여 초안 삭제/로그아웃을 확인했다. 임시 계정은 정리했으며 사용자의 비밀번호·실제 주기는 변경하지 않았다.
+- 사용자 요청으로 예시 계정과 미착수 초안 한 개를 삭제했다. 삭제 전 전체 DB 백업을 검증하고 나머지 모든 테이블 행의 건수·내용 해시가 보존됐음을 트랜잭션 안과 커밋 후에 각각 확인했다. 백업과 영수증: `~/.local/share/twelveweek/backups/2026-10-28-before-account-deletion/`.
+- 운영 UI의 계정 설정과 작성 중인 카드의 삭제 버튼 확인 화면, 비밀값을 제외한 동작 검증은 로컬 `.logs/deployment-20261028/account-*-live.png`, `draft-delete-live.png`, `account-live-verification.json`에 있다. 사용자가 방금 만든 초안은 삭제 버튼을 제공한 상태이며 대신 삭제하지 않았다.
+
+## 최초 이름·비밀번호 전환 확인 결과 · 19:28 KST
 
 - [배포 코드 GitHub CI](https://github.com/joonyy/TwelveWeek/actions/runs/40657981923): 단위 58개·PostgreSQL API 49개·Chromium 44개·빌드 통과.
 - 운영 `/api/access`가 `{required:false, authentication:"password"}`를 반환하고, 이름 목록에 비밀번호 해시를 노출하지 않음.
