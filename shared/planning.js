@@ -156,7 +156,13 @@ export function withWeekModel(
   else weeks.set(week, { week, blocks: structuredClone(blocks) });
   return {
     ...plan,
-    ...(applyToDefault ? { modelWeek: structuredClone(blocks) } : {}),
+    ...(applyToDefault
+      ? {
+          modelWeek: structuredClone(blocks).map(
+            ({ templateOrigin, ...block }) => block,
+          ),
+        }
+      : {}),
     weeklyModelWeeks: [...weeks.values()].sort((a, b) => a.week - b.week),
   };
 }

@@ -87,7 +87,12 @@ export function createApp({
   app.use(express.json({ limit: "1mb" }));
   app.get("/api/health", async (req, res) => {
     await pool.query("SELECT 1");
-    res.json({ ok: true, service: "twelve-week", time: now().toISOString() });
+    res.json({
+      ok: true,
+      service: "twelve-week",
+      time: now().toISOString(),
+      features: { dayTemplates: 1 },
+    });
   });
   // Compatibility for a previously cached entry screen; no site-wide key.
   app.get("/api/access", (req, res) =>

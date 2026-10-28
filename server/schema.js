@@ -65,22 +65,66 @@ const goal = z.object({
     )
     .max(50),
 });
+const modelBlock = z.object({
+  id,
+  day: z.number().int().min(0).max(6),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  minutes: z.number().int().min(5).max(720),
+  kind: z.enum(["strategy", "buffer", "breakout", "fixed"]),
+  title: text,
+  templateOrigin: z.object({ date: dateSchema, templateId: id }).optional(),
+});
 const modelWeekBlocks = z
-  .array(
-    z.object({
-      id,
-      day: z.number().int().min(0).max(6),
-      time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-      minutes: z.number().int().min(5).max(720),
-      kind: z.enum(["strategy", "buffer", "breakout", "fixed"]),
-      title: text,
-    }),
-  )
+  .array(modelBlock)
   .max(100)
   .refine(
     (items) => new Set(items.map((b) => b.id)).size === items.length,
     "시간 블록 ID는 중복될 수 없습니다.",
   );
+const dayTemplate = z
+  .object({
+    id,
+    name: z.string().trim().min(1).max(80),
+    workBlockId: id.optional(),
+    blocks: z
+      .array(
+        modelBlock.omit({ day: true, templateOrigin: true }).extend({
+          anchor: z.enum(["clock", "work-start", "work-end"]).optional(),
+          offset: z.number().int().min(-1440).max(1440).optional(),
+        }),
+      )
+      .max(100),
+  })
+  .superRefine((template, ctx) => {
+    const work = template.blocks.find((b) => b.id === template.workBlockId);
+    if (
+      new Set(template.blocks.map((b) => b.id)).size !== template.blocks.length
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "템플릿 블록 ID는 중복될 수 없습니다.",
+      });
+    if (
+      template.workBlockId &&
+      (!work ||
+        work.kind !== "fixed" ||
+        (work.anchor && work.anchor !== "clock"))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "기준 근무는 고정 시각의 근무 블록이어야 합니다.",
+      });
+    for (const block of template.blocks)
+      if (
+        block.anchor &&
+        block.anchor !== "clock" &&
+        (!work || block.id === work.id || block.offset === undefined)
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "연결 활동에는 기준 근무와 간격(분)이 필요합니다.",
+        });
+  });
 export const planSchema = z
   .object({
     longVision: text,
@@ -101,6 +145,15 @@ export const planSchema = z
       .optional(),
     goals: z.array(goal).max(50),
     modelWeek: modelWeekBlocks,
+    modelWeekMode: z.enum(["week", "day"]).optional(),
+    dayTemplates: z
+      .array(dayTemplate)
+      .max(20)
+      .refine(
+        (items) => new Set(items.map((t) => t.id)).size === items.length,
+        "템플릿 ID는 중복될 수 없습니다.",
+      )
+      .optional(),
     weeklyModelWeeks: z
       .array(
         z.object({
