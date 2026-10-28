@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { emptyPlan } from "../../shared/domain.js";
 import { templateFromDay } from "../../shared/day-templates.js";
+test.use({ locale: "ko-KR" });
 async function setup(
   page,
   request,
@@ -160,6 +161,15 @@ test("keep the weekly editor, copy a day into a reusable template, link work anc
   const saved = await getCycle();
   expect(saved.plan.modelWeek).toEqual(plan.modelWeek);
   expect((await getWeek(1)).state).toEqual(before.state);
+  await lib.screenshot({
+    path: "test-results/day-template-library-desktop-ko.png",
+  });
+  await page.setViewportSize({ width: 1024, height: 900 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await lib.screenshot({
     path: "test-results/day-template-library-mobile.png",

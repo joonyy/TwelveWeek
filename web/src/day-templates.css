@@ -1,3 +1,6 @@
+.day-template-library {
+  container-type: inline-size;
+}
 .day-template-library fieldset {
   border: 0;
   padding: 0;
@@ -28,7 +31,7 @@
 }
 .day-template-block {
   display: grid;
-  grid-template-columns: minmax(120px, 2fr) repeat(4, minmax(100px, 1fr)) auto;
+  grid-template-columns: minmax(160px, 2fr) repeat(4, minmax(144px, 1fr)) auto;
   gap: 12px;
   align-items: end;
   padding: 16px;
@@ -46,6 +49,7 @@
   max-width: 100%;
 }
 .modal.day-template-modal {
+  max-width: 1200px;
   width: min(1200px, calc(100vw - 32px));
 }
 .day-template-review,
@@ -119,4 +123,28 @@
   background: #163f32;
   color: #fff;
   border-color: #163f32;
+}
+
+.day-template-block > button {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .day-template-block .field:has(input[type="time"]) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 1000px) {
+  .day-template-block {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container (max-width: 600px) {
+  .day-template-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .day-template-block > .field:first-child,
+  .day-template-block .field:has(input[type="time"]) {
+    grid-column: 1 / -1;
+  }
 }
