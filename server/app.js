@@ -31,6 +31,7 @@ import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
 import { mountExecutionTacticRoutes } from "./execution-tactics.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
+import { deleteProfileData } from "./accounts.js";
 import {
   hasGoalContent,
   hasTacticContent,
@@ -187,6 +188,19 @@ export function createApp({
     req.tokenHash = hash(token);
     next();
   });
+  if (rateLimits) {
+    const limitAccountChanges = rateLimit({
+      windowMs: 15 * 60_000,
+      limit: 10,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+    });
+    app.use("/api/me", (req, res, next) =>
+      ["PUT", "DELETE"].includes(req.method)
+        ? limitAccountChanges(req, res, next)
+        : next(),
+    );
+  }
   app.get("/api/me", (req, res) =>
     res.json({
       profile: req.profile,
@@ -226,6 +240,29 @@ export function createApp({
         "DELETE FROM sessions WHERE profile_id=$1 AND token_hash<>$2",
         [req.profile.id, req.tokenHash],
       );
+    });
+    res.status(204).end();
+  });
+  app.delete("/api/me", async (req, res) => {
+    const input = z
+      .object({
+        currentPassword: z.string().min(1).max(128),
+        confirmationName: nameSchema,
+      })
+      .parse(req.body);
+    await transaction(pool, async (db) => {
+      const profile = (
+        await db.query(
+          "SELECT name,password_hash FROM profiles WHERE id=$1 FOR UPDATE",
+          [req.profile.id],
+        )
+      ).rows[0];
+      if (!profile) fail(401, "삭제되었거나 사용할 수 없는 계정이에요.");
+      if (input.confirmationName.normalize("NFKC").trim() !== profile.name)
+        fail(400, "삭제할 계정의 이름을 정확히 입력해주세요.");
+      if (!(await verifyPassword(input.currentPassword, profile.password_hash)))
+        fail(400, "현재 비밀번호를 확인해주세요.");
+      await deleteProfileData(db, req.profile.id);
     });
     res.status(204).end();
   });
