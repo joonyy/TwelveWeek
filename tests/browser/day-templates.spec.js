@@ -137,17 +137,29 @@ test("keep the weekly editor, copy a day into a reusable template, link work anc
     .getByLabel("새 하루 템플릿 이름", { exact: true })
     .fill("근무 있는 평일");
   await lib.getByLabel("템플릿 원본 하루").selectOption("2");
-  await lib.getByRole("button", { name: "이 하루로 템플릿 만들기" }).click();
-  await expect(lib.getByRole("article")).toHaveCount(4);
+  await lib.getByRole("button", { name: "하루 유형 만들기" }).click();
+  await expect(lib.locator(".template-agenda-item")).toHaveCount(4);
+  await expect(
+    lib.getByRole("group", { name: "하루 유형 원형 시간표" }),
+  ).toBeVisible();
+  await lib.getByText("유형 이름·기준 근무 설정", { exact: true }).click();
   await lib
     .getByLabel("기준 근무 블록")
     .selectOption({ label: "맥날 근무 · 19:00" });
   await lib
-    .getByLabel("활동 시각 기준 2", { exact: true })
-    .selectOption("work-start");
-  await lib.getByLabel("기준 간격 2", { exact: true }).fill("-30");
+    .locator(".template-agenda-item")
+    .filter({ hasText: "산책" })
+    .click();
   await lib
-    .getByLabel("활동 시각 기준 3", { exact: true })
+    .getByLabel("선택한 활동 시각 기준", { exact: true })
+    .selectOption("work-start");
+  await lib.getByLabel("선택한 활동 기준 간격", { exact: true }).fill("-30");
+  await lib
+    .locator(".template-agenda-item")
+    .filter({ hasText: "러닝" })
+    .click();
+  await lib
+    .getByLabel("선택한 활동 시각 기준", { exact: true })
     .selectOption("work-end");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.locator(".toast")).toContainText("저장");
@@ -155,9 +167,13 @@ test("keep the weekly editor, copy a day into a reusable template, link work anc
   await expect(
     mode.getByRole("button", { name: "하루 유형 조합형" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(lib.getByLabel("기준 간격 2", { exact: true })).toHaveValue(
-    "-30",
-  );
+  await lib
+    .locator(".template-agenda-item")
+    .filter({ hasText: "산책" })
+    .click();
+  await expect(
+    lib.getByLabel("선택한 활동 기준 간격", { exact: true }),
+  ).toHaveValue("-30");
   const saved = await getCycle();
   expect(saved.plan.modelWeek).toEqual(plan.modelWeek);
   expect((await getWeek(1)).state).toEqual(before.state);
@@ -302,6 +318,7 @@ test("stale saves and an older API preserve the preview and template edits witho
   await dialog
     .getByRole("button", { name: "템플릿 관리", exact: true })
     .click();
+  await dialog.getByText("유형 이름·기준 근무 설정", { exact: true }).click();
   await dialog
     .getByLabel("하루 템플릿 이름", { exact: true })
     .fill("업데이트 중에도 남는 입력");
@@ -316,4 +333,234 @@ test("stale saves and an older API preserve the preview and template edits witho
     dialog.getByLabel("하루 템플릿 이름", { exact: true }),
   ).toHaveValue("업데이트 중에도 남는 입력");
   expect((await getCycle()).plan).toEqual(c.plan);
+});
+
+async function clockPoint(clock, offset, radius = 128) {
+  await clock.scrollIntoViewIfNeeded();
+  const box = await clock.boundingBox(),
+    angle = (offset / 1440) * Math.PI * 2 - Math.PI / 2;
+  return {
+    x: box.x + ((200 + radius * Math.cos(angle)) / 400) * box.width,
+    y: box.y + ((200 + radius * Math.sin(angle)) / 400) * box.height,
+  };
+}
+async function clockDrag(page, clock, from, to, radius = 128) {
+  const a = await clockPoint(clock, from, radius),
+    b = await clockPoint(clock, to, radius);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 12 });
+  await page.mouse.up();
+}
+
+test("draw a blank day on the clock, move with grab offset, resize both edges, undo and preserve records on save", async ({
+  page,
+  request,
+}) => {
+  const { getCycle, getWeek, plan } = await setup(
+    page,
+    request,
+    "원형 하루 직접 편집",
+    { templates: false, view: "plan" },
+  );
+  const before = await getWeek(1);
+  await page
+    .getByRole("button", { name: "하루 유형 조합형", exact: true })
+    .click();
+  const lib = page.getByRole("region", { name: "하루 템플릿 보관함" });
+  await expect(lib.getByLabel("템플릿 원본 하루")).toHaveValue("-1");
+  await lib.getByLabel("새 하루 템플릿 이름", { exact: true }).fill("빈 평일");
+  await lib
+    .getByRole("button", { name: "하루 유형 만들기", exact: true })
+    .click();
+  const clock = lib.getByRole("group", { name: "하루 유형 원형 시간표" });
+  await expect(clock.locator(".template-clock-block")).toHaveCount(0);
+  await clockDrag(page, clock, 245, 365);
+  const editor = lib.getByRole("article", { name: "선택한 활동 편집" });
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("08:00");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("120");
+  await editor.getByLabel("선택한 활동 이름").fill("독서 집중");
+  await clockDrag(page, clock, 300, 360);
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("09:00");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("120");
+  const end = clock.getByRole("button", { name: "독서 집중 종료 시간 조절" });
+  await end.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("150");
+  const start = clock.getByRole("button", { name: "독서 집중 시작 시간 조절" });
+  await start.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("08:30");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("180");
+  async function dragEdge(edge, delta) {
+    const handle = clock.getByRole("button", {
+      name: `독서 집중 ${edge} 시간 조절`,
+    });
+    await handle.scrollIntoViewIfNeeded();
+    const svg = await clock.boundingBox(),
+      hit = await handle.boundingBox();
+    const x = hit.x + hit.width / 2,
+      y = hit.y + hit.height / 2,
+      cx = svg.x + svg.width / 2,
+      cy = svg.y + svg.height / 2;
+    const r = Math.hypot(x - cx, y - cy),
+      angle = Math.atan2(y - cy, x - cx);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++)
+      await page.mouse.move(
+        cx + r * Math.cos(angle + ((delta / 1440) * Math.PI * 2 * i) / 8),
+        cy + r * Math.sin(angle + ((delta / 1440) * Math.PI * 2 * i) / 8),
+      );
+    await page.mouse.up();
+  }
+  await dragEdge("시작", -30);
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("08:00");
+  await dragEdge("종료", 30);
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("240");
+  await clock.locator(".template-clock-block").focus();
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("08:30");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("180");
+  // Cancel a pointer drag without committing any change.
+  const a = await clockPoint(clock, 330),
+    b = await clockPoint(clock, 390);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(editor.getByLabel("선택한 활동 시작 시각")).toHaveValue("08:30");
+  await clock.locator(".template-clock-block").focus();
+  await page.keyboard.press("Backspace");
+  await expect(clock.locator(".template-clock-block")).toHaveCount(0);
+  await lib.getByRole("button", { name: "실행 취소", exact: true }).click();
+  await expect(clock.locator(".template-clock-block")).toHaveCount(1);
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.locator(".toast")).toContainText("저장");
+  await page.reload();
+  await expect(clock.locator(".template-clock-block")).toHaveCount(1);
+  const saved = await getCycle();
+  expect(saved.plan.dayTemplates[0].blocks[0]).toMatchObject({
+    title: "독서 집중",
+    time: "08:30",
+    minutes: 180,
+  });
+  expect(saved.plan.modelWeek).toEqual(plan.modelWeek);
+  expect((await getWeek(1)).state).toEqual(before.state);
+  await lib.screenshot({ path: "test-results/day-template-clock-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await clock.locator(".template-clock-block").click();
+  await expect(editor.getByLabel("선택한 활동 이름")).toHaveValue("독서 집중");
+  const handle = clock.getByRole("button", {
+    name: "독서 집중 종료 시간 조절",
+  });
+  await handle.scrollIntoViewIfNeeded();
+  const rect = await clock.boundingBox(),
+    hit = await handle.boundingBox();
+  const x = hit.x + hit.width / 2,
+    y = hit.y + hit.height / 2,
+    cx = rect.x + rect.width / 2,
+    cy = rect.y + rect.height / 2;
+  const radius = Math.hypot(x - cx, y - cy),
+    angle = Math.atan2(y - cy, x - cx);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setTouchEmulationEnabled", {
+    enabled: true,
+    maxTouchPoints: 1,
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y }],
+  });
+  for (let i = 1; i <= 8; i++)
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        {
+          x:
+            cx + radius * Math.cos(angle + ((30 / 1440) * Math.PI * 2 * i) / 8),
+          y:
+            cy + radius * Math.sin(angle + ((30 / 1440) * Math.PI * 2 * i) / 8),
+        },
+      ],
+    });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await cdp.detach();
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("210");
+  await lib.screenshot({ path: "test-results/day-template-clock-mobile.png" });
+});
+
+test("work moves linked activities, keeps fixed time, and overnight sleep remains editable from its continuation", async ({
+  page,
+  request,
+}) => {
+  const { getCycle } = await setup(page, request, "원형 출퇴근 연결", {
+    view: "plan",
+  });
+  await page
+    .getByRole("button", { name: "하루 유형 조합형", exact: true })
+    .click();
+  const lib = page.getByRole("region", { name: "하루 템플릿 보관함" });
+  const clock = lib.getByRole("group", { name: "하루 유형 원형 시간표" });
+  const work = clock
+    .locator(".template-clock-block")
+    .filter({ has: page.locator("title", { hasText: "맥날 근무" }) });
+  await work.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    lib.locator(".template-agenda-item").filter({ hasText: "산책" }),
+  ).toContainText("19:00");
+  await expect(
+    lib.locator(".template-agenda-item").filter({ hasText: "러닝" }),
+  ).toContainText("다음 날 01:30");
+  await expect(
+    lib.locator(".template-agenda-item").filter({ hasText: "고정 약속" }),
+  ).toContainText("10:30");
+  await lib.getByRole("button", { name: "+ 활동 추가", exact: true }).click();
+  const editor = lib.getByRole("article", { name: "선택한 활동 편집" });
+  await editor.getByLabel("선택한 활동 이름").fill("수면");
+  await editor.getByLabel("선택한 활동 시작 시각").fill("03:00");
+  await editor.getByLabel("선택한 활동 길이").fill("360");
+  const tail = clock.locator(".template-clock-block.continuation");
+  await expect(tail).toHaveCount(1);
+  await tail.click();
+  await expect(editor.getByLabel("선택한 활동 이름")).toHaveValue("수면");
+  const end = clock.getByRole("button", { name: "수면 종료 시간 조절" });
+  await end.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(editor.getByLabel("선택한 활동 길이")).toHaveValue("390");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.locator(".toast")).toContainText("저장");
+  const t = (await getCycle()).plan.dayTemplates[0];
+  expect(t.blocks.find((b) => b.title === "맥날 근무").time).toBe("19:30");
+  expect(t.blocks.find((b) => b.title === "산책").offset).toBe(-30);
+  expect(t.blocks.find((b) => b.title === "수면")).toMatchObject({
+    time: "03:00",
+    minutes: 390,
+  });
+  await lib
+    .locator(".template-agenda-item")
+    .filter({ hasText: "맥날 근무" })
+    .click();
+  await editor.getByLabel("선택한 활동 종류").selectOption("breakout");
+  await expect(editor.getByLabel("선택한 활동 종류")).toHaveValue("breakout");
+  await expect(
+    lib.locator(".template-agenda-item").filter({ hasText: "산책" }),
+  ).toContainText("19:00");
+  await expect(
+    lib.locator(".template-agenda-item").filter({ hasText: "러닝" }),
+  ).toContainText("다음 날 01:30");
+  await lib.getByRole("button", { name: "실행 취소", exact: true }).click();
+  await expect(editor.getByLabel("선택한 활동 종류")).toHaveValue("fixed");
 });

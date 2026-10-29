@@ -24,29 +24,281 @@
   align-items: center;
   margin: 16px 0;
 }
-.day-template-blocks {
-  display: grid;
-  gap: 12px;
-  margin: 20px 0;
+.day-template-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: stretch;
+  margin: 18px 0;
 }
-.day-template-block {
+.day-template-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid #dce4d6;
+  background: white;
+  border-radius: 10px;
+  padding: 12px 18px;
+  color: #52674b;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.day-template-tab small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.day-template-tab[aria-pressed="true"] {
+  background: #eaf0e1;
+  border-color: #86a66c;
+  color: #274c38;
+  box-shadow: inset 0 -3px #86a66c;
+}
+.day-template-new {
+  padding: 18px;
+  border: 1px dashed #b9c9ac;
+  border-radius: 12px;
+  margin: 18px 0;
+  background: #fafbf7;
+}
+.day-template-settings {
+  border-bottom: 1px solid #e1e7da;
+  padding: 12px 0;
+  margin-bottom: 22px;
+}
+.day-template-settings summary {
+  color: #6a7f5a;
+  cursor: pointer;
+  font-size: 13px;
+}
+.day-template-settings[open] summary {
+  margin-bottom: 20px;
+}
+.day-template-workspace {
   display: grid;
-  grid-template-columns: minmax(160px, 2fr) repeat(4, minmax(144px, 1fr)) auto;
-  gap: 12px;
-  align-items: end;
-  padding: 16px;
-  background: #f6f8f2;
-  border: 1px solid #e0e6d8;
+  grid-template-columns: minmax(260px, 460px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.template-clock-area {
+  min-width: 0;
+}
+.template-day-clock {
+  width: 100%;
+  max-width: 460px;
+  display: block;
+  overflow: visible;
+}
+.template-day-clock[data-editable="true"] {
+  touch-action: none;
+}
+.template-clock-slot {
+  fill: #f5f7ef;
+  stroke: #dde5d5;
+  stroke-width: 0.8;
+  cursor: crosshair;
+}
+.template-clock-slot:hover,
+.template-clock-slot:focus-visible {
+  fill: #d9e7ca;
+  stroke: #567d43;
+  stroke-width: 2;
+  outline: none;
+}
+.template-clock-block {
+  fill: var(--activity-color);
+  stroke: white;
+  stroke-width: 1;
+  cursor: grab;
+}
+.template-clock-block:hover,
+.template-clock-block:focus-visible,
+.template-clock-block.selected {
+  stroke: var(--activity-border);
+  stroke-width: 3;
+  outline: none;
+  filter: brightness(0.96);
+}
+.template-clock-block.continuation {
+  stroke: var(--activity-border);
+  stroke-dasharray: 3 2;
+  opacity: 0.7;
+}
+.template-clock-handle {
+  cursor: ns-resize;
+  outline: none;
+}
+.template-clock-handle circle {
+  fill: white;
+  stroke: var(--activity-border);
+  stroke-width: 1.5;
+}
+.template-clock-handle path {
+  pointer-events: none;
+  fill: none;
+  stroke: var(--activity-border);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.template-clock-handle:focus-visible circle,
+.template-clock-handle:hover circle {
+  fill: #e9efd9;
+  stroke-width: 3;
+}
+.template-clock-range {
+  fill: #98bb7fcc;
+  stroke: #3b662a;
+  stroke-width: 2;
+  pointer-events: none;
+}
+.template-clock-hour {
+  font-size: 12px;
+  fill: #75836c;
+  pointer-events: none;
+}
+.template-clock-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  fill: #94a089;
+  pointer-events: none;
+}
+.template-clock-center {
+  font-size: 24px;
+  font-weight: 600;
+  fill: #294d3a;
+  pointer-events: none;
+}
+.template-clock-note {
+  font-size: 9px;
+  fill: #89967f;
+  pointer-events: none;
+}
+.template-clock-feedback {
+  text-align: center;
+  font-size: 12px;
+  color: #567345;
+  min-height: 40px;
+  padding-top: 8px;
+}
+.template-clock-tools {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+.template-clock-area > .footnote {
+  text-align: center;
+}
+.day-template-inspector {
+  min-width: 0;
+}
+.template-activity-editor,
+.template-activity-empty {
+  padding: 20px;
+  background: #f8faf4;
+  border: 1px solid #e0e7d7;
   border-radius: 12px;
 }
-.day-template-block .field {
-  margin: 0;
+.template-activity-editor header {
+  margin-bottom: 18px;
+}
+.template-activity-editor h3,
+.template-activity-empty h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #294d3a;
+  overflow-wrap: anywhere;
+}
+.template-activity-editor header span {
+  font-size: 12px;
+  color: #748566;
+}
+.template-activity-editor .two-col {
+  gap: 12px;
+}
+.template-activity-editor .field {
+  min-width: 0;
+  margin-bottom: 14px;
+}
+.template-activity-editor input,
+.template-activity-editor select {
+  min-width: 0;
+  width: 100%;
+}
+.template-activity-empty p {
+  font-size: 13px;
+  color: #748566;
+  margin-bottom: 18px;
+}
+.template-agenda-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.template-agenda-heading h3 {
+  font-size: 14px;
+  color: #536d44;
+  margin: 12px 0;
+}
+.template-agenda-heading small {
+  font-size: 11px;
+  font-weight: normal;
+  margin-left: 8px;
+}
+.template-agenda {
+  display: grid;
+  gap: 6px;
+  max-height: 330px;
+  overflow-y: auto;
+}
+.template-agenda-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: white;
+  text-align: left;
+  color: #3c5746;
+}
+.template-agenda-item[aria-pressed="true"] {
+  border-color: #9eb58a;
+  background: #f2f6eb;
+}
+.template-agenda-item > i {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 26px;
+  border-radius: 4px;
+  background: var(--activity-color);
+}
+.template-agenda-item > span {
+  flex: 1;
   min-width: 0;
 }
-.day-template-block input,
-.day-template-block select {
-  min-width: 0;
-  max-width: 100%;
+.template-agenda-item strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.template-agenda-item small {
+  display: block;
+  color: #819274;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.template-agenda-item em {
+  font-size: 10px;
+  font-style: normal;
+  color: #819274;
+  flex: 0 0 auto;
 }
 .modal.day-template-modal {
   max-width: 1200px;
@@ -89,62 +341,52 @@
   flex-wrap: wrap;
   margin: 20px 0;
 }
-@media (max-width: 1000px) {
-  .day-template-block {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .day-template-create {
-    grid-template-columns: 1fr 1fr;
-  }
-  .day-template-create button {
-    grid-column: 1/-1;
-  }
-}
-@media (max-width: 600px) {
-  .day-template-create {
-    grid-template-columns: 1fr;
-  }
-  .day-template-block {
-    padding: 12px;
-    gap: 12px 8px;
-  }
-  .day-template-block > .field:first-child {
-    grid-column: 1/-1;
-  }
-  .modal.day-template-modal {
-    width: calc(100vw - 24px);
-  }
-  .day-template-actions .button {
-    white-space: normal;
-  }
-}
-
 .day-template-mode [aria-pressed="true"] {
   background: #163f32;
   color: #fff;
   border-color: #163f32;
 }
-
-.day-template-block > button {
-  white-space: nowrap;
+@container (max-width: 800px) {
+  .day-template-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .template-clock-area {
+    width: min(100%, 420px);
+    margin: auto;
+  }
+  .day-template-create {
+    grid-template-columns: 1fr 1fr;
+  }
+  .day-template-create button {
+    grid-column: 1 / -1;
+  }
+}
+@container (max-width: 500px) {
+  .day-template-create,
+  .template-activity-editor .two-col,
+  .day-template-settings .two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .template-agenda-item em {
+    max-width: 62px;
+    white-space: normal;
+  }
+  .template-activity-editor,
+  .template-activity-empty,
+  .day-template-new {
+    padding: 14px;
+  }
+  .day-template-tab {
+    padding: 10px 12px;
+    flex: 1 1 40%;
+  }
 }
 @media (max-width: 600px) {
-  .day-template-block .field:has(input[type="time"]) {
-    grid-column: 1 / -1;
+  .modal.day-template-modal {
+    width: calc(100vw - 24px);
   }
-}
-
-@container (max-width: 1000px) {
-  .day-template-block {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@container (max-width: 600px) {
-  .day-template-block {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .day-template-block > .field:first-child,
-  .day-template-block .field:has(input[type="time"]) {
-    grid-column: 1 / -1;
+  .day-template-actions .button {
+    white-space: normal;
   }
 }

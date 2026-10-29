@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { addDays, hasScheduledTime } from "../../shared/domain.js";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../../shared/planning.js";
 import {
   DAY_BLOCK_KINDS,
+  dayTemplateTimeline,
   templateFromDay,
   workDuration,
   instantiateDayTemplate,
@@ -15,6 +16,10 @@ import {
   planWithDayTemplate,
   templateConflicts,
 } from "../../shared/day-templates.js";
+import TemplateDayClock, {
+  templateTimeLabel,
+  templatePaint,
+} from "./TemplateDayClock.jsx";
 import "./day-templates.css";
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const anchorNames = {
@@ -35,335 +40,575 @@ export function DayTemplateLibrary({
   readonly = false,
 }) {
   const [selected, setSelected] = useState(templates[0]?.id || ""),
+    [activityId, setActivityId] = useState(null),
     [name, setName] = useState(""),
-    [sourceDay, setSourceDay] = useState(0);
+    [sourceDay, setSourceDay] = useState(-1),
+    [creating, setCreating] = useState(!templates.length),
+    [, setHistoryVersion] = useState(0);
+  const history = useRef({ past: [], future: [] });
   const current = templates.find((t) => t.id === selected) || templates[0];
+  useEffect(() => {
+    setActivityId(null);
+  }, [current?.id]);
+  function commit(next) {
+    if (readonly) return;
+    history.current.past.push(structuredClone(templates));
+    history.current.past = history.current.past.slice(-50);
+    history.current.future = [];
+    setHistoryVersion((v) => v + 1);
+    onChange(next);
+  }
+  function restore(redo) {
+    if (readonly) return;
+    const from = redo ? history.current.future : history.current.past;
+    const to = redo ? history.current.past : history.current.future;
+    if (!from.length) return;
+    to.push(structuredClone(templates));
+    onChange(from.pop());
+    setHistoryVersion((v) => v + 1);
+  }
   const change = (patch) =>
-    onChange(
+    commit(
       templates.map((t) => (t.id === current.id ? { ...t, ...patch } : t)),
     );
   const blockChange = (id, patch) =>
     change({
       blocks: current.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
     });
-  const removeBlock = (id) =>
+  function asClock(block) {
+    const resolved = dayTemplateTimeline(current).find(
+      (b) => b.id === block.id,
+    );
+    return {
+      ...block,
+      anchor: "clock",
+      offset: undefined,
+      time: timeAtOffset(((resolved.start % 1440) + 1440) % 1440),
+    };
+  }
+  function removeBlock(id) {
     change({
       ...(current.workBlockId === id ? { workBlockId: undefined } : {}),
       blocks: current.blocks
         .filter((b) => b.id !== id)
-        .map((b) =>
-          current.workBlockId === id
-            ? { ...b, anchor: "clock", offset: undefined }
-            : b,
-        ),
+        .map((b) => (current.workBlockId === id ? asClock(b) : b)),
     });
+    setActivityId(null);
+  }
+  const timeline = current ? dayTemplateTimeline(current) : [];
+  const activity = current?.blocks.find((b) => b.id === activityId);
+  const resolved = timeline.find((b) => b.id === activityId);
   function create() {
     if (!name.trim() || templates.length >= 20) return;
-    const template = templateFromDay(sourceBlocks, sourceDay, name.trim());
-    onChange([...templates, template]);
+    const template = templateFromDay(
+      sourceDay < 0 ? [] : sourceBlocks,
+      sourceDay,
+      name.trim(),
+    );
+    commit([...templates, template]);
     setSelected(template.id);
     setName("");
+    setCreating(false);
   }
+  function addActivity({ start = 300, minutes = 60 } = {}) {
+    if (!current || current.blocks.length >= 100 || readonly) return;
+    const block = {
+      id: crypto.randomUUID(),
+      title: "새 활동",
+      time: timeAtOffset(((start % 1440) + 1440) % 1440),
+      minutes: Math.min(720, Math.max(5, minutes)),
+      kind: "strategy",
+    };
+    change({ blocks: [...current.blocks, block] });
+    setActivityId(block.id);
+  }
+  function adjustTime(id, timing) {
+    const block = current.blocks.find((b) => b.id === id);
+    if (!block) return;
+    const patch = { minutes: Math.max(5, Math.min(720, timing.minutes)) };
+    if (
+      !block.anchor ||
+      block.anchor === "clock" ||
+      block.id === current.workBlockId
+    )
+      patch.time = timeAtOffset(((timing.start % 1440) + 1440) % 1440);
+    else {
+      const work = timeline.find((b) => b.id === current.workBlockId);
+      patch.offset = Math.max(
+        -1440,
+        Math.min(
+          1440,
+          timing.start -
+            work.start -
+            (block.anchor === "work-end" ? work.minutes : 0),
+        ),
+      );
+    }
+    blockChange(id, patch);
+  }
+  const creation = (
+    <div className="day-template-new">
+      <div className="day-template-create">
+        <label className="field">
+          <span>새 유형 이름</span>
+          <input
+            aria-label="새 하루 템플릿 이름"
+            maxLength={80}
+            value={name}
+            placeholder="예: 평일·근무 없음"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>시작할 시간표</span>
+          <select
+            aria-label="템플릿 원본 하루"
+            value={sourceDay}
+            onChange={(e) => setSourceDay(+e.target.value)}
+          >
+            <option value={-1}>빈 하루부터 만들기</option>
+            {days.map((d, i) => (
+              <option key={d} value={i}>
+                {labelDay(sourceDates, i)} 복사
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="button outlined"
+          disabled={!name.trim() || templates.length >= 20}
+          onClick={create}
+        >
+          하루 유형 만들기
+        </button>
+      </div>
+      <div
+        className="day-template-presets"
+        role="group"
+        aria-label="템플릿 이름 예시"
+      >
+        {[
+          "평일·근무 없음",
+          "평일·근무 있음",
+          "주말·근무 없음",
+          "주말·근무 있음",
+        ].map((value) => (
+          <button
+            type="button"
+            className="text-button"
+            key={value}
+            onClick={() => setName(value)}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      {templates.length > 0 && (
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => setCreating(false)}
+        >
+          추가 닫기
+        </button>
+      )}
+    </div>
+  );
   return (
     <section className="day-template-library" aria-label="하루 템플릿 보관함">
-      <p>
-        기존 시간표의 하루를 복사해 재사용하세요. 템플릿 수정·삭제는 이미 날짜에
-        적용한 시간표를 바꾸지 않습니다.
+      <p className="muted">
+        하루 유형을 고르고 원 위에서 시간을 그려보세요. 수정한 유형은 저장 후
+        날짜별로 적용합니다.
       </p>
       <fieldset disabled={readonly}>
-        <div className="day-template-create">
-          <label className="field">
-            <span>새 템플릿 이름</span>
-            <input
-              aria-label="새 하루 템플릿 이름"
-              maxLength={80}
-              value={name}
-              placeholder="예: 평일·근무 있음"
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>복사할 하루</span>
-            <select
-              aria-label="템플릿 원본 하루"
-              value={sourceDay}
-              onChange={(e) => setSourceDay(+e.target.value)}
+        <div
+          className="day-template-tabs"
+          role="group"
+          aria-label="편집할 하루 유형"
+        >
+          {templates.map((t) => (
+            <button
+              type="button"
+              key={t.id}
+              className="day-template-tab"
+              aria-pressed={current?.id === t.id}
+              onClick={() => {
+                setSelected(t.id);
+                setCreating(false);
+              }}
             >
-              {days.map((day, i) => (
-                <option key={day} value={i}>
-                  {labelDay(sourceDates, i)}
-                </option>
-              ))}
-            </select>
-          </label>
+              <strong>{t.name || "이름 없는 유형"}</strong>
+              <small>활동 {t.blocks.length}개</small>
+            </button>
+          ))}
           <button
             type="button"
             className="button outlined"
-            disabled={!name.trim() || templates.length >= 20}
-            onClick={create}
+            disabled={templates.length >= 20}
+            onClick={() => setCreating((v) => !v)}
           >
-            이 하루로 템플릿 만들기
+            + 하루 유형 추가
           </button>
         </div>
-        <div
-          className="day-template-presets"
-          role="group"
-          aria-label="템플릿 이름 예시"
-        >
-          {[
-            "평일·근무 없음",
-            "평일·근무 있음",
-            "주말·근무 없음",
-            "주말·근무 있음",
-          ].map((value) => (
-            <button
-              type="button"
-              className="text-button"
-              key={value}
-              onClick={() => setName(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-        {templates.length ? (
+        {(creating || !templates.length) && creation}
+        {current ? (
           <>
-            <label className="field">
-              <span>편집할 템플릿</span>
-              <select
-                aria-label="편집할 하루 템플릿"
-                value={current.id}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="two-col">
-              <label className="field">
-                <span>이름</span>
-                <input
-                  aria-label="하루 템플릿 이름"
-                  maxLength={80}
-                  value={current.name}
-                  onChange={(e) => change({ name: e.target.value })}
-                />
-              </label>
-              <label className="field">
-                <span>시각 조정의 기준 근무</span>
-                <select
-                  aria-label="기준 근무 블록"
-                  value={current.workBlockId || ""}
-                  onChange={(e) =>
-                    change({
-                      workBlockId: e.target.value || undefined,
-                      blocks: current.blocks.map((b) =>
-                        !e.target.value || b.id === e.target.value
-                          ? { ...b, anchor: "clock", offset: undefined }
-                          : b,
-                      ),
-                    })
-                  }
+            <details className="day-template-settings">
+              <summary>유형 이름·기준 근무 설정</summary>
+              <div className="two-col">
+                <label className="field">
+                  <span>유형 이름</span>
+                  <input
+                    aria-label="하루 템플릿 이름"
+                    maxLength={80}
+                    value={current.name}
+                    onChange={(e) => change({ name: e.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>출퇴근 연결의 기준 근무</span>
+                  <select
+                    aria-label="기준 근무 블록"
+                    value={current.workBlockId || ""}
+                    onChange={(e) =>
+                      change({
+                        workBlockId: e.target.value || undefined,
+                        blocks: current.blocks.map((b) =>
+                          !e.target.value || b.id === e.target.value
+                            ? asClock(b)
+                            : b,
+                        ),
+                      })
+                    }
+                  >
+                    <option value="">기준 근무 없음 · 모두 고정 시각</option>
+                    {current.blocks
+                      .filter((b) => b.kind === "fixed")
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.title || "이름 없는 근무"} · {b.time}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <p className="footnote">
+                근무를 기준으로 연결할 활동만 출근·퇴근 기준을 선택하세요. 다른
+                약속은 고정 시각으로 유지합니다.
+              </p>
+              <div className="day-template-actions">
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={templates.length >= 20}
+                  onClick={() => {
+                    const copy = structuredClone(current),
+                      id = crypto.randomUUID(),
+                      ids = new Map(
+                        copy.blocks.map((b) => [b.id, crypto.randomUUID()]),
+                      );
+                    copy.blocks = copy.blocks.map((b) => ({
+                      ...b,
+                      id: ids.get(b.id),
+                    }));
+                    copy.workBlockId = ids.get(copy.workBlockId);
+                    copy.id = id;
+                    copy.name = `${current.name.slice(0, 75)} 복사`;
+                    commit([...templates, copy]);
+                    setSelected(id);
+                  }}
                 >
-                  <option value="">기준 근무 없음 · 모두 고정 시각</option>
-                  {current.blocks
-                    .filter((b) => b.kind === "fixed")
+                  템플릿 복제
+                </button>
+                <button
+                  type="button"
+                  className="text-button danger"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "이 템플릿을 보관함에서 삭제할까요? 이미 날짜에 적용한 일정은 그대로 남습니다.",
+                      )
+                    )
+                      commit(templates.filter((t) => t.id !== current.id));
+                  }}
+                >
+                  템플릿 삭제
+                </button>
+              </div>
+            </details>
+            <div className="day-template-workspace">
+              <TemplateDayClock
+                key={current.id}
+                blocks={timeline.filter(
+                  (b) => Number.isFinite(b.start) && b.minutes > 0,
+                )}
+                selectedId={activityId}
+                onSelect={setActivityId}
+                onCreate={addActivity}
+                onTimingChange={adjustTime}
+                onRemove={removeBlock}
+                readonly={readonly}
+                onUndo={() => restore(false)}
+                onRedo={() => restore(true)}
+                canUndo={history.current.past.length > 0}
+                canRedo={history.current.future.length > 0}
+              />
+              <div className="day-template-inspector">
+                {activity ? (
+                  <article
+                    className="template-activity-editor"
+                    aria-label="선택한 활동 편집"
+                  >
+                    <header>
+                      <h3>{activity.title || "새 활동"}</h3>
+                      <span>
+                        {resolved && templateTimeLabel(resolved.start)}–
+                        {resolved &&
+                          templateTimeLabel(resolved.start + resolved.minutes)}
+                      </span>
+                    </header>
+                    <label className="field">
+                      <span>활동</span>
+                      <input
+                        aria-label="선택한 활동 이름"
+                        value={activity.title}
+                        maxLength={6000}
+                        onChange={(e) =>
+                          blockChange(activity.id, { title: e.target.value })
+                        }
+                      />
+                    </label>
+                    <div className="two-col">
+                      <label className="field">
+                        <span>종류</span>
+                        <select
+                          aria-label="선택한 활동 종류"
+                          value={activity.kind}
+                          onChange={(e) => {
+                            const kind = e.target.value;
+                            change({
+                              ...(activity.id === current.workBlockId &&
+                              kind !== "fixed"
+                                ? { workBlockId: undefined }
+                                : {}),
+                              blocks: current.blocks.map((b) => ({
+                                ...b,
+                                ...(activity.id === current.workBlockId &&
+                                kind !== "fixed"
+                                  ? asClock(b)
+                                  : {}),
+                                ...(b.id === activity.id ? { kind } : {}),
+                              })),
+                            });
+                          }}
+                        >
+                          {Object.entries(DAY_BLOCK_KINDS).map(
+                            ([key, title]) => (
+                              <option key={key} value={key}>
+                                {title}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>배치 기준</span>
+                        <select
+                          aria-label="선택한 활동 시각 기준"
+                          value={activity.anchor || "clock"}
+                          disabled={
+                            !current.workBlockId ||
+                            current.workBlockId === activity.id
+                          }
+                          onChange={(e) => {
+                            const anchor = e.target.value,
+                              work = timeline.find(
+                                (b) => b.id === current.workBlockId,
+                              );
+                            // Changing the relation preserves the currently visible time.
+                            blockChange(
+                              activity.id,
+                              anchor === "clock"
+                                ? {
+                                    anchor,
+                                    time: timeAtOffset(
+                                      ((resolved.start % 1440) + 1440) % 1440,
+                                    ),
+                                    offset: undefined,
+                                  }
+                                : {
+                                    anchor,
+                                    offset: Math.max(
+                                      -1440,
+                                      Math.min(
+                                        1440,
+                                        resolved.start -
+                                          work.start -
+                                          (anchor === "work-end"
+                                            ? work.minutes
+                                            : 0),
+                                      ),
+                                    ),
+                                  },
+                            );
+                          }}
+                        >
+                          {Object.entries(anchorNames).map(([key, title]) => (
+                            <option key={key} value={key}>
+                              {title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {activity.anchor && activity.anchor !== "clock" ? (
+                        <label className="field">
+                          <span>기준과의 간격(분)</span>
+                          <input
+                            aria-label="선택한 활동 기준 간격"
+                            type="number"
+                            min={-1440}
+                            max={1440}
+                            value={activity.offset ?? 0}
+                            onChange={(e) =>
+                              blockChange(activity.id, {
+                                offset: +e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                      ) : (
+                        <label className="field">
+                          <span>시작 시각</span>
+                          <input
+                            aria-label="선택한 활동 시작 시각"
+                            type="time"
+                            value={activity.time}
+                            onChange={(e) => {
+                              if (e.target.value)
+                                blockChange(activity.id, {
+                                  time: e.target.value,
+                                });
+                            }}
+                          />
+                        </label>
+                      )}
+                      <label className="field">
+                        <span>길이(분)</span>
+                        <input
+                          aria-label="선택한 활동 길이"
+                          type="number"
+                          min={5}
+                          max={720}
+                          value={activity.minutes}
+                          onChange={(e) =>
+                            blockChange(activity.id, {
+                              minutes: +e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    {activity.id === current.workBlockId ? (
+                      <p className="footnote">
+                        기준 근무입니다. 출퇴근에 연결한 활동이 함께 움직입니다.
+                      </p>
+                    ) : (
+                      activity.kind === "fixed" && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() =>
+                            change({
+                              workBlockId: activity.id,
+                              blocks: current.blocks.map((b) =>
+                                b.id === activity.id ? asClock(b) : b,
+                              ),
+                            })
+                          }
+                        >
+                          이 활동을 기준 근무로 설정
+                        </button>
+                      )
+                    )}
+                    <button
+                      type="button"
+                      className="text-button danger"
+                      onClick={() => removeBlock(activity.id)}
+                    >
+                      선택한 활동 삭제
+                    </button>
+                  </article>
+                ) : (
+                  <div className="template-activity-empty">
+                    <h3>{current.name}</h3>
+                    <p>원 위의 블록을 누르면 여기서 편집할 수 있어요.</p>
+                    <button
+                      type="button"
+                      className="button outlined"
+                      disabled={current.blocks.length >= 100}
+                      onClick={() => addActivity()}
+                    >
+                      + 활동 추가
+                    </button>
+                  </div>
+                )}
+                <div className="template-agenda-heading">
+                  <h3>
+                    하루의 흐름 <small>{current.blocks.length}개 활동</small>
+                  </h3>
+                  {activity && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={current.blocks.length >= 100}
+                      onClick={() => addActivity()}
+                    >
+                      + 활동 추가
+                    </button>
+                  )}
+                </div>
+                <div
+                  className="template-agenda"
+                  aria-label="하루 유형 활동 목록"
+                >
+                  {[...timeline]
+                    .sort((a, b) => a.start - b.start)
                     .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.title || "이름 없는 근무"} · {b.time}
-                      </option>
+                      <button
+                        type="button"
+                        key={b.id}
+                        className="template-agenda-item"
+                        aria-pressed={b.id === activityId}
+                        onClick={() => setActivityId(b.id)}
+                      >
+                        <i style={templatePaint(b.id)} />
+                        <span>
+                          <strong>{b.title || "새 활동"}</strong>
+                          <small>
+                            {templateTimeLabel(b.start)}–
+                            {templateTimeLabel(b.start + b.minutes)} ·{" "}
+                            {b.minutes}분
+                          </small>
+                        </span>
+                        <em>
+                          {b.id === current.workBlockId
+                            ? "기준 근무"
+                            : anchorNames[b.anchor || "clock"]}
+                        </em>
+                      </button>
                     ))}
-                </select>
-              </label>
+                </div>
+              </div>
             </div>
             <p className="footnote">
-              하루는 04:00~다음 날 04:00 기준입니다. 03시 취침처럼 경계를 넘는
-              블록은 다음 아침까지 이어집니다. 출근·퇴근에 연결할 활동만 기준을
-              선택하고 간격(분)을 적으세요. 음수는 이전, 양수는 이후입니다. 다른
-              약속은 고정 시각으로 유지하세요.
+              저장 전까지는 초안입니다. 템플릿 수정·삭제는 이미 날짜에 적용한
+              시간표나 실행·평가 기록을 바꾸지 않습니다.
             </p>
-            <div className="day-template-blocks">
-              {current.blocks.map((b, i) => (
-                <article
-                  key={b.id}
-                  className="day-template-block"
-                  aria-label={`템플릿 블록 ${i + 1}`}
-                >
-                  <label className="field">
-                    <span>활동</span>
-                    <input
-                      aria-label={`활동 ${i + 1}`}
-                      value={b.title}
-                      maxLength={6000}
-                      onChange={(e) =>
-                        blockChange(b.id, { title: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>종류</span>
-                    <select
-                      aria-label={`활동 종류 ${i + 1}`}
-                      value={b.kind}
-                      onChange={(e) => {
-                        const kind = e.target.value;
-                        change({
-                          ...(b.id === current.workBlockId && kind !== "fixed"
-                            ? { workBlockId: undefined }
-                            : {}),
-                          blocks: current.blocks.map((x) => ({
-                            ...x,
-                            ...(x.id === b.id ? { kind } : {}),
-                            ...(b.id === current.workBlockId && kind !== "fixed"
-                              ? { anchor: "clock", offset: undefined }
-                              : {}),
-                          })),
-                        });
-                      }}
-                    >
-                      {Object.entries(DAY_BLOCK_KINDS).map(([key, title]) => (
-                        <option key={key} value={key}>
-                          {title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>배치 기준</span>
-                    <select
-                      aria-label={`활동 시각 기준 ${i + 1}`}
-                      disabled={
-                        !current.workBlockId || current.workBlockId === b.id
-                      }
-                      value={b.anchor || "clock"}
-                      onChange={(e) =>
-                        blockChange(b.id, {
-                          anchor: e.target.value,
-                          offset: e.target.value === "clock" ? undefined : 0,
-                        })
-                      }
-                    >
-                      {Object.entries(anchorNames).map(([key, title]) => (
-                        <option key={key} value={key}>
-                          {title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {b.anchor && b.anchor !== "clock" ? (
-                    <label className="field">
-                      <span>기준과의 간격(분)</span>
-                      <input
-                        aria-label={`기준 간격 ${i + 1}`}
-                        type="number"
-                        min={-1440}
-                        max={1440}
-                        value={b.offset ?? 0}
-                        onChange={(e) =>
-                          blockChange(b.id, { offset: +e.target.value })
-                        }
-                      />
-                    </label>
-                  ) : (
-                    <label className="field">
-                      <span>시작 시각</span>
-                      <input
-                        aria-label={`활동 시작 시각 ${i + 1}`}
-                        type="time"
-                        value={b.time}
-                        onChange={(e) =>
-                          blockChange(b.id, { time: e.target.value })
-                        }
-                      />
-                    </label>
-                  )}
-                  <label className="field">
-                    <span>길이(분)</span>
-                    <input
-                      aria-label={`활동 길이 ${i + 1}`}
-                      type="number"
-                      min={5}
-                      max={720}
-                      value={b.minutes}
-                      onChange={(e) =>
-                        blockChange(b.id, { minutes: +e.target.value })
-                      }
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="text-button danger"
-                    aria-label={`활동 ${i + 1} 삭제`}
-                    onClick={() => removeBlock(b.id)}
-                  >
-                    삭제
-                  </button>
-                </article>
-              ))}
-            </div>
-            <div className="day-template-actions">
-              <button
-                type="button"
-                className="button outlined"
-                disabled={current.blocks.length >= 100}
-                onClick={() =>
-                  change({
-                    blocks: [
-                      ...current.blocks,
-                      {
-                        id: crypto.randomUUID(),
-                        title: "",
-                        time: "09:00",
-                        minutes: 60,
-                        kind: "strategy",
-                      },
-                    ],
-                  })
-                }
-              >
-                활동 추가
-              </button>
-              <button
-                type="button"
-                className="text-button"
-                disabled={templates.length >= 20}
-                onClick={() => {
-                  const id = crypto.randomUUID();
-                  onChange([
-                    ...templates,
-                    {
-                      ...structuredClone(current),
-                      id,
-                      name: `${current.name.slice(0, 75)} 복사`,
-                    },
-                  ]);
-                  setSelected(id);
-                }}
-              >
-                템플릿 복제
-              </button>
-              <button
-                type="button"
-                className="text-button danger"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      "이 템플릿을 보관함에서 삭제할까요? 이미 날짜에 적용한 일정은 그대로 남습니다.",
-                    )
-                  )
-                    onChange(templates.filter((t) => t.id !== current.id));
-                }}
-              >
-                템플릿 삭제
-              </button>
-            </div>
           </>
         ) : (
           <p className="muted">
-            아직 하루 템플릿이 없어요. 위에서 원본 하루를 골라 시작하세요. 전술
+            빈 하루부터 만들거나 기존 시간표의 하루를 복사해 시작하세요. 전술
             실행과 평가 횟수는 복사하지 않습니다.
           </p>
         )}
