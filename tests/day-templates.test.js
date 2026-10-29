@@ -4,6 +4,7 @@ import { emptyPlan } from "../shared/domain.js";
 import { modelWeekFor, withWeekModel } from "../shared/planning.js";
 import {
   templateFromDay,
+  dayTemplateTimeline,
   workDuration,
   instantiateDayTemplate,
   templateReplacementCandidates,
@@ -276,4 +277,33 @@ test("promoting a dated template result to the default removes date provenance o
       options.today,
     ).every((c) => c.week === 1),
   );
+});
+
+test("visual timing uses exactly the same work offsets and overnight dates as application without mutating the template", () => {
+  const t = template(),
+    snapshot = structuredClone(t);
+  const timing = dayTemplateTimeline(t, {
+    workTime: "23:00",
+    workMinutes: 480,
+  });
+  assert.deepEqual(
+    timing.map((b) => [b.title, b.start, b.minutes]),
+    [
+      ["맥날", 1140, 480],
+      ["산책", 1110, 30],
+      ["러닝", 1620, 30],
+      ["고정 약속", 480, 60],
+    ],
+  );
+  assert.deepEqual(t, snapshot);
+  const applied = instantiateDayTemplate(t, "2026-10-11", {
+    ...options,
+    workTime: "23:00",
+    workMinutes: 480,
+  });
+  assert.equal(
+    applied.blocks.find((b) => b.block.title === "러닝").date,
+    "2026-10-12",
+  );
+  assert.equal(dayTemplateTimeline(t)[3].start, 480);
 });

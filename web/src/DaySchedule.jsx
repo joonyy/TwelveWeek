@@ -9,6 +9,7 @@ import {
 } from "../../shared/planning.js";
 import { evaluationDate } from "../../shared/domain.js";
 import FocusTimer from "./FocusTimer.jsx";
+import { clockPoint as point, clockArc as arc } from "./clock-geometry.js";
 import "./day-schedule.css";
 
 const colorKey = (block) =>
@@ -26,19 +27,6 @@ function blockPaint(block) {
   };
 }
 
-const point = (radius, minutes) => {
-  const angle = (minutes / 1440) * Math.PI * 2 - Math.PI / 2;
-  return [200 + radius * Math.cos(angle), 200 + radius * Math.sin(angle)];
-};
-function arc(start, end, inner, outer) {
-  const finish = Math.min(end, start + 1439.99);
-  const a = point(outer, start),
-    b = point(outer, finish),
-    c = point(inner, finish),
-    d = point(inner, start);
-  const large = finish - start > 720 ? 1 : 0;
-  return `M ${a} A ${outer} ${outer} 0 ${large} 1 ${b} L ${c} A ${inner} ${inner} 0 ${large} 0 ${d} Z`;
-}
 export default function DaySchedule({
   blocks,
   day,

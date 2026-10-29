@@ -36,6 +36,28 @@ export function workDuration(start, end) {
   const clock = (t) => +t.slice(0, 2) * 60 + +t.slice(3);
   return (clock(end) - clock(start) + 1440) % 1440;
 }
+// One timing resolver for both the visual editor and date application.
+// start is measured from 04:00 and can cross into an adjacent evaluation day.
+export function dayTemplateTimeline(template, { workTime, workMinutes } = {}) {
+  const work = template.blocks.find((b) => b.id === template.workBlockId);
+  const workStart = calendarOffset(workTime || work?.time || "09:00");
+  const length = workMinutes ?? work?.minutes ?? 60;
+  return template.blocks.map((original) => {
+    const anchor = original.anchor || "clock";
+    let start = calendarOffset(original.time),
+      minutes = original.minutes;
+    if (original.id === work?.id) {
+      start = workStart;
+      minutes = length;
+    } else if (work && anchor !== "clock") {
+      start =
+        workStart +
+        (anchor === "work-end" ? length : 0) +
+        (original.offset || 0);
+    }
+    return { ...original, start, minutes };
+  });
+}
 export function instantiateDayTemplate(
   template,
   date,
@@ -44,7 +66,6 @@ export function instantiateDayTemplate(
   const blocks = [],
     issues = [];
   const work = template.blocks.find((b) => b.id === template.workBlockId);
-  const workStart = calendarOffset(workTime || work?.time || "09:00");
   const length = workMinutes ?? work?.minutes ?? 60;
   if (work && (!Number.isInteger(length) || length < 5 || length > 720))
     return {
@@ -57,18 +78,12 @@ export function instantiateDayTemplate(
       ],
       invalid: true,
     };
-  for (const original of template.blocks) {
-    const anchor = original.anchor || "clock";
-    let offset = calendarOffset(original.time),
+  for (const original of dayTemplateTimeline(template, {
+    workTime,
+    workMinutes,
+  })) {
+    const offset = original.start,
       minutes = original.minutes;
-    if (original.id === work?.id) {
-      offset = workStart;
-      minutes = length;
-    } else if (anchor !== "clock")
-      offset =
-        workStart +
-        (anchor === "work-end" ? length : 0) +
-        (original.offset || 0);
     const dayShift = Math.floor(offset / 1440),
       actualDate = addDays(date, dayShift);
     const index = daysBetween(startDate, actualDate),
