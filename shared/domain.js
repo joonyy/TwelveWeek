@@ -184,7 +184,8 @@ export function weekGoals(state) {
   );
 }
 export function scoreWeek(state) {
-  const rows = state.tactics.map((t) => {
+  const required = state.tactics.filter((t) => t.plannedCount > 0);
+  const rows = required.map((t) => {
     const items = state.occurrences.filter((o) => o.tacticId === t.id);
     const done = items.filter(
       (o) => o.completed && (t.kind !== "daily" || !o.extra),
@@ -196,8 +197,8 @@ export function scoreWeek(state) {
       done,
       rate,
       complete: done >= t.plannedCount,
-      weight: 100 / state.tactics.length,
-      contribution: (100 / state.tactics.length) * rate,
+      weight: 100 / required.length,
+      contribution: (100 / required.length) * rate,
       ...(extras.length
         ? {
             extraPlanned: extras.length,

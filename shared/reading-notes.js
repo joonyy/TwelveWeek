@@ -1,9 +1,9 @@
+import { weekRecords } from "./week-replanning.js";
 export function readingRecords(weeks) {
   return weeks.flatMap((week) =>
-    week.state.occurrences
-      .filter((o) => o.readingRecord)
-      .map((o) => {
-        const tactic = week.state.tactics.find((t) => t.id === o.tacticId);
+    weekRecords(week.state)
+      .filter(({ occurrence }) => occurrence.readingRecord)
+      .map(({ occurrence: o, tactic }) => {
         return {
           ...o.readingRecord,
           occurrenceId: o.id,

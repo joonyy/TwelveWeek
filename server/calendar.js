@@ -5,6 +5,7 @@ import {
   hasScheduledTime,
 } from "../shared/domain.js";
 import { timetableForWeek } from "../shared/planning.js";
+import { calendarWeekState } from "../shared/week-replanning.js";
 const escape = (s) =>
   String(s)
     .replaceAll("\\", "\\\\")
@@ -34,6 +35,7 @@ function fold(line) {
   return out + current;
 }
 export function calendar(cycle, week, now = new Date()) {
+  week = { ...week, state: calendarWeekState(week.state) };
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

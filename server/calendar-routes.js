@@ -58,6 +58,8 @@ export function validateCalendarPlacements(
     if (p.action === "skip") continue;
     if (!p.date || p.date < range.date || p.date > addDays(range.date, 6))
       fail(400, "같은 주 안에서 실행 날짜를 선택해주세요.");
+    if (state.replans?.length && p.date < state.replans.at(-1).effectiveDate)
+      fail(409, "재정립 이전 평가일에는 새 약속을 배치할 수 없어요.");
     const window = placementRange(p);
     if (
       window.start < +new Date(range.start) ||

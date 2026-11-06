@@ -97,6 +97,17 @@ test("calendar review requires explicit overlap acknowledgement and keeps each e
     /시간 안/,
   );
 });
+
+test("calendar imports cannot move revised promises into a closed pre-replanning phase", () => {
+  const { state, range, placements } = fixture();
+  state.replans = [{ effectiveDate: "2026-10-21" }];
+  placements[0].action = "create";
+  assert.throws(
+    () =>
+      validateCalendarPlacements(state, placements, [], range, "2026-10-21"),
+    /재정립 이전/,
+  );
+});
 test("daily requirements, completed records and past-week dates survive calendar review", () => {
   const { plan, range } = fixture();
   plan.goals[0].tactics[0].kind = "daily";

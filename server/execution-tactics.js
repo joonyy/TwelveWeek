@@ -120,10 +120,22 @@ export function mountExecutionTacticRoutes(
         fail(409, "지난주의 전술과 평가 기준은 바꿀 수 없어요.");
       if (input.date < start || input.date > addDays(start, 6))
         fail(400, "선택한 주 안에서 실행 날짜를 정해주세요.");
+      if (week.state.replans?.length && input.date < today)
+        fail(409, "재정립 이후 약속은 오늘 이후 날짜에 추가해주세요.");
       const plan = structuredClone(cycle.plan);
       const goal = plan.goals.find((g) => g.id === input.goalId);
       if (!goal) fail(404, "전술을 추가할 목표를 찾을 수 없어요.");
       let tactic;
+      const requestedId = input.sourceTacticId || input.tactic?.id;
+      if (
+        week.state.replans?.some((r) =>
+          r.snapshot.tactics.some((t) => t.id === requestedId),
+        )
+      )
+        fail(
+          409,
+          "재정립 이전 전술은 새 약속으로 작성해주세요. 이전 기록은 보존됩니다.",
+        );
       if (input.sourceTacticId) {
         tactic = goal.tactics.find((t) => t.id === input.sourceTacticId);
         if (!tactic) fail(404, "선택한 목표의 전술을 찾을 수 없어요.");
@@ -187,6 +199,12 @@ export function mountExecutionTacticRoutes(
           );
           const addedTactic = snapshot.tactics[0];
           let addedOccurrences = snapshot.occurrences;
+          if (row.state.replans?.length) {
+            addedOccurrences = addedOccurrences.filter(
+              (o) => !o.requiredDate || o.requiredDate >= today,
+            );
+            addedTactic.plannedCount = addedOccurrences.length;
+          }
           if (future) {
             // The future baseline already contains this tactic; use its generated occurrences.
             addedOccurrences = state.occurrences.filter(

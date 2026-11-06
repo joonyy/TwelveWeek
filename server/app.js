@@ -30,6 +30,8 @@ import { mountAIRoutes } from "./ai-routes.js";
 import { mountVisionMCP } from "./vision-mcp.js";
 import { mountCalendarRoutes } from "./calendar-routes.js";
 import { mountExecutionTacticRoutes } from "./execution-tactics.js";
+import { mountWeekReplanning } from "./week-replanning.js";
+import { stateForDay } from "../shared/week-replanning.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import { deleteProfileData, deleteCycleData } from "./accounts.js";
 import {
@@ -601,7 +603,7 @@ export function createApp({
     today: evaluationDate(now()),
     daily: Array.from({ length: 7 }, (_, i) => {
       const date = addDays(weekStart(cycle.start_date, week.number), i);
-      return { date, ...scoreDay(week.state, date) };
+      return { date, ...scoreDay(stateForDay(week.state, date), date) };
     }),
   });
   app.get("/api/cycles/:cycleId/weeks/:week", async (req, res) => {
@@ -616,6 +618,7 @@ export function createApp({
     audit,
     version,
   });
+  mountWeekReplanning(app, { pool, now, getWeek, present, audit, version });
   async function mutateWeek(req, kind, input, change) {
     return transaction(pool, async (db) => {
       const { cycle, week } = await getWeek(db, req, true);
@@ -655,6 +658,12 @@ export function createApp({
         (state, cycle, week) => {
           const o = findOccurrence(state, req.params.occurrenceId);
           const start = weekStart(cycle.start_date, week.number);
+          if (
+            input.date &&
+            state.replans?.length &&
+            input.date < state.replans.at(-1).effectiveDate
+          )
+            fail(409, "재정립 이전 평가일에는 새 약속을 배치할 수 없어요.");
           if (o.completed)
             fail(
               409,
