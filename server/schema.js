@@ -73,6 +73,18 @@ const modelBlock = z.object({
   kind: z.enum(["strategy", "buffer", "breakout", "fixed"]),
   title: text,
   templateOrigin: z.object({ date: dateSchema, templateId: id }).optional(),
+  calendarSource: z
+    .object({
+      uid: z.string().min(1).max(2000),
+      key: z.string().min(1).max(2200),
+      start: z.iso.datetime(),
+      end: z.iso.datetime(),
+      timeZone: z.string().max(300),
+      calendarName: z.string().max(300),
+      allDay: z.boolean(),
+    })
+    .refine((v) => v.end >= v.start, "원본 일정의 종료 시각을 확인해주세요.")
+    .optional(),
 });
 const modelWeekBlocks = z
   .array(modelBlock)

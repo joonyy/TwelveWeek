@@ -105,6 +105,14 @@ export async function parseCalendarFile(text, startDate) {
       fail("해당 주의 일정이 너무 많습니다. 캘린더를 나눠 선택해주세요.");
     events.set(identity, {
       key: identity,
+      uid: String(item.component.getFirstPropertyValue("uid")),
+      timeZone:
+        item.component.getFirstProperty("dtstart")?.getParameter("tzid") ||
+        start.zone?.tzid ||
+        "floating",
+      calendarName: String(
+        calendar.getFirstPropertyValue("x-wr-calname") || "",
+      ).slice(0, 300),
       title: (item.summary || "제목 없는 일정").slice(0, 6000),
       start: from,
       end: to,
@@ -182,6 +190,15 @@ export async function parseCalendarFile(text, startDate) {
         minutes,
         kind: "fixed",
         title: event.title,
+        calendarSource: {
+          uid: event.uid,
+          key: event.key,
+          start: new Date(event.start).toISOString(),
+          end: new Date(event.end).toISOString(),
+          timeZone: event.timeZone,
+          calendarName: event.calendarName,
+          allDay: event.allDay,
+        },
       });
       cursor = stop;
     }
@@ -209,14 +226,12 @@ export function calendarImportConflicts(blocks, existing, occurrences, dates) {
   };
   const windows = [
     ...existing.map(toWindow),
-    ...occurrences
-      .filter(hasScheduledTime)
-      .map((o) => ({
-        id: o.id,
-        start: +calendarInstant(o.date, o.time),
-        end: +calendarInstant(o.date, o.time) + o.minutes * 60000,
-        title: "배치한 실행",
-      })),
+    ...occurrences.filter(hasScheduledTime).map((o) => ({
+      id: o.id,
+      start: +calendarInstant(o.date, o.time),
+      end: +calendarInstant(o.date, o.time) + o.minutes * 60000,
+      title: "배치한 실행",
+    })),
     ...blocks.map(toWindow),
   ];
   return blocks.flatMap((block) => {

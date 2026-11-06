@@ -5,6 +5,8 @@ import {
   calendarImportConflicts,
 } from "../shared/calendar-file.js";
 import { calendarInstant, addDays } from "../shared/domain.js";
+import { emptyPlan } from "../shared/domain.js";
+import { planSchema } from "../server/schema.js";
 const calendar = (events, extra = "") =>
   `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${extra}${events}\r\nEND:VCALENDAR\r\n`;
 const event = (uid, start, end, extra = "") =>
@@ -32,6 +34,14 @@ test("calendar files use KST floating times, preserve UTC instants and split ove
     ],
   );
   assert.equal(events[1].blocks[0].time, "10:00");
+  const origin = events[0].blocks[0].calendarSource;
+  assert.equal(origin.uid, "night");
+  assert.equal(origin.timeZone, "Asia/Seoul");
+  assert.equal(origin.start, "2026-10-20T14:00:00.000Z");
+  assert.equal(origin.end, "2026-10-20T20:00:00.000Z");
+  const plan = emptyPlan();
+  plan.modelWeek = events.flatMap((e) => e.blocks);
+  assert.deepEqual(planSchema.parse(plan).modelWeek[0].calendarSource, origin);
   assert.deepEqual(
     (await parseCalendarFile(source, "2026-10-19")).map((e) => e.blocks),
     events.map((e) => e.blocks),
