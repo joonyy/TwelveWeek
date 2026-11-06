@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "./api.js";
 import CalendarMergePlanner from "./CalendarMergePlanner.jsx";
-import { WeekCalendar } from "./PlanningWidgets.jsx";
+import { ModelWeekEditor } from "./PlanningWidgets.jsx";
+import { calendarWeekState } from "../../shared/week-replanning.js";
 import { addDays, hasScheduledTime } from "../../shared/domain.js";
 import {
   modelWeekFor,
@@ -22,11 +23,18 @@ const eventTime = (event) => {
     : `${clock(event.start)} ~ ${clock(event.end)}`;
 };
 
-export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
+export default function CalendarImport({
+  cycle,
+  week,
+  Modal,
+  onBusy,
+  onDirty,
+  onApplied,
+}) {
   const [source, setSource] = useState("file");
   const [busy, setBusy] = useState(false);
   const [events, setEvents] = useState(null);
-  const [selected, setSelected] = useState([]);
+  const [draft, setDraft] = useState(null);
   const [message, setMessage] = useState("");
   const [filename, setFilename] = useState("");
   const [allowOverlap, setAllowOverlap] = useState(false);
@@ -38,51 +46,74 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
     addDays(week.start, index),
   );
   const existing = modelWeekFor(cycle.plan, week.number);
+  const changed =
+    draft !== null && JSON.stringify(draft) !== JSON.stringify(existing);
+  useEffect(() => {
+    onDirty?.(changed);
+    return () => onDirty?.(false);
+  }, [changed, onDirty]);
+  const updateDraft = (blocks) => {
+    setDraft(blocks);
+    setAllowOverlap(false);
+  };
   const isNew = (event) =>
     event.blocks.length &&
     event.blocks.some((b) => !existing.some((old) => old.id === b.id));
-  const chosen = (events || []).filter((event) => selected.includes(event.key));
-  const newBlocks = chosen
-    .flatMap((event) => event.blocks)
-    .filter((block) => !existing.some((old) => old.id === block.id));
+  const chosen = (events || []).filter((event) =>
+    event.blocks.some((b) => draft?.some((d) => d.id === b.id)),
+  );
+  const executionState = calendarWeekState(week.state);
   const conflicts = [
     ...new Set(
       calendarImportConflicts(
-        newBlocks,
-        timetableForWeek(cycle.plan, week.number),
-        week.state.occurrences,
+        draft || [],
+        timetableForWeek(cycle.plan, week.number).filter((b) => b.day < 0),
+        executionState.occurrences,
         dates,
       ),
     ),
   ];
-  const overLimit = existing.length + newBlocks.length > 100;
+  const overLimit = (draft?.length || 0) > 100;
   const readonly =
     cycle.status === "complete" || addDays(week.start, 6) < week.today;
 
   async function readFile(e) {
-    const file = e.target.files?.[0];
+    const files = [...(e.target.files || [])];
     e.target.value = "";
-    if (!file) return;
-    setEvents(null);
-    setSelected([]);
+    if (!files.length) return;
     setMessage("");
     setAllowOverlap(false);
-    setFilename(file.name);
-    if (!/\.ics$/i.test(file.name) || file.size > 1024 * 1024) {
+    if (
+      files.length > 10 ||
+      files.some((file) => !/\.ics$/i.test(file.name)) ||
+      files.reduce((sum, file) => sum + file.size, 0) > 1024 * 1024
+    ) {
       setMessage(
-        "1MB 이하의 .ics 파일을 선택해주세요. 캘린더 아카이브(.icbu)는 지원하지 않습니다.",
+        "합계 1MB 이하의 .ics 파일을 최대 10개 선택해주세요. 캘린더 아카이브(.icbu)는 지원하지 않습니다.",
       );
       return;
     }
     setBusy(true);
     try {
-      const result = await parseCalendarFile(await file.text(), week.start);
-      setEvents(result);
-      setSelected(
-        result
-          .filter((event) => !event.allDay && isNew(event))
-          .map((event) => event.key),
+      const results = await Promise.all(
+        files.map(async (file) =>
+          parseCalendarFile(await file.text(), week.start),
+        ),
       );
+      const incoming = results.flat();
+      setEvents([
+        ...new Map(
+          [...(events || []), ...incoming].map((event) => [event.key, event]),
+        ).values(),
+      ]);
+      const merged = new Map(
+        (draft || existing).map((block) => [block.id, block]),
+      );
+      for (const event of incoming)
+        for (const block of event.blocks)
+          if (!merged.has(block.id)) merged.set(block.id, block);
+      setDraft([...merged.values()]);
+      setFilename(files.map((file) => file.name).join(", "));
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -93,7 +124,7 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
     if (
       readonly ||
       busy ||
-      !newBlocks.length ||
+      !changed ||
       overLimit ||
       (conflicts.length && !allowOverlap)
     )
@@ -108,13 +139,10 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
           title: cycle.title,
           startDate: cycle.start_date,
           weekCount: cycle.week_count,
-          plan: withWeekModel(cycle.plan, week.number, [
-            ...existing,
-            ...newBlocks,
-          ]),
+          plan: withWeekModel(cycle.plan, week.number, draft),
         },
       });
-      onApplied(changed, { imported: chosen.length, blocks: newBlocks.length });
+      onApplied(changed, { merged: true, blocks: draft.length });
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -145,7 +173,12 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
           type="button"
           className={`button ${source === "icloud" ? "" : "outlined"}`}
           aria-pressed={source === "icloud"}
-          disabled={busy}
+          disabled={busy || changed}
+          title={
+            changed
+              ? "병합 초안을 저장하거나 창을 닫아 취소한 뒤 연결 방식을 변경하세요."
+              : undefined
+          }
           onClick={() => setSource("icloud")}
         >
           iCloud 연결
@@ -172,10 +205,16 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
               Apple 내보내기 안내
             </a>
           </p>
+          <p>
+            기존 시간표와 가져온 일정을 병합 초안에 모두 올립니다. 필요 없는
+            블록을 삭제하고 시간을 조정한 뒤 저장하세요. 원본 캘린더는 변경되지
+            않습니다.
+          </p>
           <label className="field">
             <span>캘린더 파일(.ics)</span>
             <input
               type="file"
+              multiple
               aria-label="캘린더 파일(.ics)"
               accept=".ics,text/calendar"
               disabled={busy}
@@ -193,14 +232,46 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
           {events && (
             <>
               <p className="muted">
-                {filename} · 해당 주 일정 {events.length}개 · 선택{" "}
-                {chosen.length}개
+                {filename} · 해당 주 일정 {events.length}개 · 초안{" "}
+                {draft.length}개 블록
               </p>
               <p className="footnote">
-                선택한 일정은 이 주의 근무·고정 일정 블록으로 추가됩니다. 기존
-                시간표와 전술·실행·평가 기록은 유지됩니다. 종일 일정은 직접
-                선택하세요. 같은 파일에서 이미 가져온 블록은 건너뜁니다.
+                종일 일정도 초안에 포함하며, 자정을 넘기는 일정은 04시 경계에서
+                나뉘어 보입니다. 전술·실행·평가와 다른 주차 시간표는 유지됩니다.
+                같은 블록은 중복 추가하지 않습니다.
               </p>
+              <div className="week-model-actions">
+                <button
+                  type="button"
+                  className="button outlined"
+                  disabled={busy || readonly}
+                  onClick={() =>
+                    updateDraft(
+                      draft.filter(
+                        (b) => !existing.some((old) => old.id === b.id),
+                      ),
+                    )
+                  }
+                >
+                  기존 생활 블록 제외
+                </button>
+                <button
+                  type="button"
+                  className="button outlined"
+                  disabled={busy || readonly}
+                  onClick={() =>
+                    updateDraft([
+                      ...new Map(
+                        [...existing, ...events.flatMap((e) => e.blocks)].map(
+                          (b) => [b.id, b],
+                        ),
+                      ).values(),
+                    ])
+                  }
+                >
+                  병합 초안 다시 만들기
+                </button>
+              </div>
               {events.length ? (
                 <div
                   className="calendar-import-events"
@@ -211,15 +282,18 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
                     <label key={event.key} className="calendar-import-event">
                       <input
                         type="checkbox"
-                        disabled={busy || !isNew(event)}
-                        checked={selected.includes(event.key)}
+                        disabled={busy || readonly || !event.blocks.length}
+                        checked={chosen.includes(event)}
                         onChange={(e) => {
-                          setSelected((old) =>
+                          const ids = new Set(event.blocks.map((b) => b.id));
+                          updateDraft(
                             e.target.checked
-                              ? [...old, event.key]
-                              : old.filter((key) => key !== event.key),
+                              ? [
+                                  ...draft.filter((b) => !ids.has(b.id)),
+                                  ...event.blocks,
+                                ]
+                              : draft.filter((b) => !ids.has(b.id)),
                           );
-                          setAllowOverlap(false);
                         }}
                       />
                       <span>
@@ -240,37 +314,45 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
                   확인해주세요.
                 </p>
               )}
-              <WeekCalendar
-                label="가져온 일정과 이번 주 시간표 비교"
-                dates={dates}
-                wrap={false}
-                readonly
-                blocks={[
-                  ...timetableForWeek(cycle.plan, week.number).map((b) => ({
-                    ...b,
-                    id: `existing-${b.id}-${b.day}`,
-                    locked: true,
-                  })),
-                  ...week.state.occurrences
-                    .filter(hasScheduledTime)
-                    .map((o) => ({
-                      ...o,
-                      id: `execution-${o.id}`,
-                      day: dates.indexOf(o.date),
-                      title:
-                        week.state.tactics.find((t) => t.id === o.tacticId)
-                          ?.title || "배치한 실행",
-                      kind: "actual",
-                      locked: true,
-                    })),
-                  ...newBlocks.map((b) => ({
-                    ...b,
-                    id: `import-${b.id}`,
-                    kind: "strategy",
-                    locked: true,
-                  })),
-                ]}
-              />
+              <section aria-label="병합 시간표 초안">
+                <h3>병합 시간표 초안</h3>
+                <p className="muted">
+                  블록 선택 후 Delete/Backspace로 삭제하고 ⌘Z/Ctrl+Z로
+                  되돌리세요. 더블클릭으로 수정할 수 있고 화면의 삭제 버튼도
+                  사용할 수 있습니다.
+                </p>
+                <ModelWeekEditor
+                  blocks={draft}
+                  onChange={updateDraft}
+                  Modal={Modal}
+                  readonly={busy || readonly}
+                  dates={dates}
+                  wrap={false}
+                  initialCreationKind="fixed"
+                  executionBlocks={[
+                    ...timetableForWeek(cycle.plan, week.number)
+                      .filter((b) => b.day < 0)
+                      .map((b) => ({
+                        ...b,
+                        id: `carry-${b.id}`,
+                        background: true,
+                        locked: true,
+                      })),
+                    ...executionState.occurrences
+                      .filter(hasScheduledTime)
+                      .map((o) => ({
+                        ...o,
+                        day: dates.indexOf(o.date),
+                        kind: "actual",
+                        locked: true,
+                        title:
+                          executionState.tactics.find(
+                            (t) => t.id === o.tacticId,
+                          )?.title || "배치한 실행",
+                      })),
+                  ]}
+                />
+              </section>
               {conflicts.length > 0 && (
                 <div
                   className="calendar-merge-message"
@@ -278,7 +360,7 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
                   aria-label="가져오기 겹침 검토"
                 >
                   <p>
-                    기존 시간표 또는 선택한 일정과 겹침: {conflicts.join(" · ")}
+                    병합 초안 또는 배치한 실행과 겹침: {conflicts.join(" · ")}
                   </p>
                   <label className="account-deletion-consent">
                     <input
@@ -303,7 +385,7 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
                 disabled={
                   readonly ||
                   busy ||
-                  !newBlocks.length ||
+                  !changed ||
                   overLimit ||
                   (conflicts.length > 0 && !allowOverlap)
                 }
@@ -311,7 +393,7 @@ export default function CalendarImport({ cycle, week, onBusy, onApplied }) {
               >
                 {busy
                   ? "저장 중…"
-                  : `선택한 일정 ${chosen.length}개를 ${week.number}주차에 추가`}
+                  : `병합한 시간표 저장 (${draft.length}개 블록)`}
               </button>
             </>
           )}

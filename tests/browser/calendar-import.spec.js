@@ -81,7 +81,8 @@ async function setup(page, request, suffix) {
     page.getByRole("region", { name: "주차별 모범 주간 조정" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "캘린더 가져오기", exact: true })
+    .getByRole("region", { name: "주차별 모범 주간 조정" })
+    .getByRole("button", { name: "캘린더에서 가져오기", exact: true })
     .click();
   return {
     root,
@@ -108,7 +109,7 @@ test("calendar file import previews overlaps, preserves executions and defaults,
   await expect(choices.getByRole("checkbox")).toHaveCount(2);
   await expect(choices).not.toContainText("다른 주 일정");
   const apply = dialog.getByRole("button", {
-    name: "선택한 일정 2개를 1주차에 추가",
+    name: "병합한 시간표 저장 (4개 블록)",
   });
   await expect(apply).toBeDisabled();
   expect((await getCycle()).version).toBe(before.version);
@@ -142,7 +143,7 @@ test("calendar file import previews overlaps, preserves executions and defaults,
     dialog.getByText("이미 가져온 일정", { exact: true }),
   ).toHaveCount(2);
   await expect(
-    dialog.getByRole("button", { name: "선택한 일정 0개를 1주차에 추가" }),
+    dialog.getByRole("button", { name: "병합한 시간표 저장 (4개 블록)" }),
   ).toBeDisabled();
   await dialog
     .getByRole("button", { name: "iCloud 연결", exact: true })
@@ -188,7 +189,7 @@ test("calendar import keeps preview on stale revision and refuses malformed file
   });
   expect(updated.ok()).toBe(true);
   await dialog
-    .getByRole("button", { name: "선택한 일정 2개를 1주차에 추가" })
+    .getByRole("button", { name: "병합한 시간표 저장 (4개 블록)" })
     .click();
   await expect(dialog.getByRole("alert")).toBeVisible();
   await expect(
@@ -197,4 +198,62 @@ test("calendar import keeps preview on stale revision and refuses malformed file
       .getByRole("checkbox", { checked: true }),
   ).toHaveCount(2);
   expect((await getCycle()).plan).toEqual(before.plan);
+});
+
+test("merge files into an editable draft, delete existing and imported blocks, undo, and save only the reviewed timetable", async ({
+  page,
+  request,
+}) => {
+  const { dialog, getCycle, getWeek } = await setup(page, request, "병합 초안");
+  const before = await getCycle(),
+    weekBefore = await getWeek();
+  const personal = file(
+    event("personal", "개인 약속", "20261007T100000", "20261007T120000"),
+  );
+  personal.name = "Personal.ics";
+  await dialog
+    .getByLabel("캘린더 파일(.ics)", { exact: true })
+    .setInputFiles([fixture, personal]);
+  await expect(
+    dialog.getByRole("button", { name: "병합한 시간표 저장 (5개 블록)" }),
+  ).toBeVisible();
+  expect((await getCycle()).plan).toEqual(before.plan);
+  await dialog
+    .getByRole("group", { name: "가져올 일정 선택" })
+    .getByRole("checkbox", { name: /야간 근무/ })
+    .uncheck();
+  const editor = dialog.getByRole("region", { name: "병합 시간표 초안" });
+  const old = editor
+    .locator(".calendar-event")
+    .filter({ hasText: "기존 OVS 근무" });
+  await old.click();
+  await editor.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(old).toHaveCount(0);
+  await editor
+    .getByRole("button", { name: "시간표 실행 취소", exact: true })
+    .click();
+  await expect(old).toHaveCount(1);
+  await old.click();
+  await editor.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(
+    dialog.getByRole("region", { name: "가져오기 겹침 검토" }),
+  ).toHaveCount(0);
+  await dialog
+    .getByRole("button", { name: "병합한 시간표 저장 (2개 블록)" })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const after = await getCycle();
+  expect(after.plan.modelWeek).toEqual(before.plan.modelWeek);
+  const blocks = after.plan.weeklyModelWeeks[0].blocks;
+  expect(blocks.map((b) => b.title).sort()).toEqual([
+    "개인 약속",
+    "학원 확정 근무",
+  ]);
+  expect(
+    blocks.every(
+      (b) =>
+        b.calendarSource?.uid && b.calendarSource.start && b.calendarSource.end,
+    ),
+  ).toBe(true);
+  expect((await getWeek()).state).toEqual(weekBefore.state);
 });

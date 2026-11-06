@@ -2462,6 +2462,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
   const [dayTemplateDirty, setDayTemplateDirty] = useState(false);
   const [calendarImport, setCalendarImport] = useState(null);
   const [calendarImportBusy, setCalendarImportBusy] = useState(false);
+  const [calendarImportDirty, setCalendarImportDirty] = useState(false);
   const [initialNavigation] = useState(() => readNavigation(cycle.id));
   const weekCount = cycleWeeks(cycle),
     reviewNumber = weekCount + 1;
@@ -2512,9 +2513,22 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
         JSON.stringify(modelWeekFor(cycle.plan, number)));
   useEffect(() => {
     if (number === reviewNumber) return;
-    onDirty(reviewDirty || modelDirty || dayTemplateDirty || replanning);
+    onDirty(
+      reviewDirty ||
+        modelDirty ||
+        dayTemplateDirty ||
+        replanning ||
+        calendarImportDirty,
+    );
     return () => onDirty(false);
-  }, [reviewDirty, modelDirty, dayTemplateDirty, replanning, number]);
+  }, [
+    reviewDirty,
+    modelDirty,
+    dayTemplateDirty,
+    replanning,
+    calendarImportDirty,
+    number,
+  ]);
   const chooseWeek = (n) => {
     if (
       (reviewDirty || reflectionDirty || modelDirty) &&
@@ -2949,9 +2963,18 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
             바로 저장됩니다.
           </p>
         </div>
-        <Button variant="outlined" disabled={busy} onClick={openDayTemplates}>
-          하루 템플릿 적용
-        </Button>
+        <div className="week-model-actions">
+          <Button
+            variant="outlined"
+            disabled={busy || !canEditModel}
+            onClick={openCalendarImport}
+          >
+            캘린더에서 가져오기
+          </Button>
+          <Button variant="outlined" disabled={busy} onClick={openDayTemplates}>
+            하루 템플릿 적용
+          </Button>
+        </div>
       </header>
       <ModelWeekEditor
         key={`${cycle.id}-${number}`}
@@ -3959,24 +3982,34 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
           title={`${calendarImport.week.number}주차 캘린더 가져오기`}
           className="calendar-merge-modal"
           onClose={() => {
-            if (!calendarImportBusy) setCalendarImport(null);
+            if (document.querySelectorAll('[role="dialog"]').length > 1) return;
+            if (
+              !calendarImportBusy &&
+              (!calendarImportDirty ||
+                window.confirm("저장하지 않은 병합 초안을 버릴까요?"))
+            )
+              setCalendarImport(null);
           }}
         >
           <Suspense
             fallback={<p className="loading">캘린더 가져오기를 준비하는 중…</p>}
           >
             <CalendarImport
+              Modal={Modal}
               cycle={calendarImport.cycle}
               week={calendarImport.week}
               onBusy={setCalendarImportBusy}
+              onDirty={setCalendarImportDirty}
               onApplied={(fresh, result) => {
                 setModelEdit(null);
                 setCalendarImport(null);
                 setCycle(fresh);
                 notify(
-                  result.imported != null
-                    ? `일정 ${result.imported}개를 ${calendarImport.week.number}주차에 추가했어요.`
-                    : `새 일정 ${result.created}개와 기존 일정 연결 ${result.linked}개를 반영했어요.`,
+                  result.merged
+                    ? `병합한 시간표 ${result.blocks}개 블록을 ${calendarImport.week.number}주차에 저장했어요.`
+                    : result.imported != null
+                      ? `일정 ${result.imported}개를 ${calendarImport.week.number}주차에 추가했어요.`
+                      : `새 일정 ${result.created}개와 기존 일정 연결 ${result.linked}개를 반영했어요.`,
                 );
               }}
             />
