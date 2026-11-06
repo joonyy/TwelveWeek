@@ -97,6 +97,7 @@ export default function CurrentWeekPlan({
           </span>
           <h2>{week.number}주차 계획표</h2>
           <p className="muted">
+            {week.state.replans?.length > 0 && "재정립 후 약속 · "}
             {week.start}~{addDays(week.start, 6)} · 목표 {groups.length}개 ·
             전술 {tactics.length}개 · 실행 {occurrences.length}회
           </p>
@@ -174,16 +175,19 @@ export default function CurrentWeekPlan({
                 </div>
                 <div className="current-week-action-footer">
                   <span className="current-week-action-progress">
-                    {row.done}회 실행 / 최소 {row.tactic.plannedCount}회
+                    {row.tactic.plannedCount
+                      ? `${row.done}회 실행 / 최소 ${row.tactic.plannedCount}회`
+                      : `선택 실행 ${row.done}회 완료`}
                   </span>
-                  {row.done >= row.tactic.plannedCount && (
-                    <span className="pill">
-                      최소 약속 달성
-                      {row.done > row.tactic.plannedCount
-                        ? ` · 초과 실행 ${row.done - row.tactic.plannedCount}회`
-                        : ""}
-                    </span>
-                  )}
+                  {row.tactic.plannedCount > 0 &&
+                    row.done >= row.tactic.plannedCount && (
+                      <span className="pill">
+                        최소 약속 달성
+                        {row.done > row.tactic.plannedCount
+                          ? ` · 초과 실행 ${row.done - row.tactic.plannedCount}회`
+                          : ""}
+                      </span>
+                    )}
                   {row.unplaced.length > 0 && (
                     <span className="current-week-action-unplaced">
                       시간 미정 {row.unplaced.length}회
@@ -309,12 +313,17 @@ export default function CurrentWeekPlan({
                     <header>
                       <h4>{t.title}</h4>
                       <span>
-                        {t.kind === "daily"
-                          ? "매일"
-                          : t.kind === "once"
-                            ? "이번 주 최소 1회"
-                            : `주 ${t.plannedCount}회 이상`}{" "}
-                        · {done}회 실행 / 최소 {t.plannedCount}회
+                        {!t.plannedCount
+                          ? "선택 실행"
+                          : t.kind === "daily"
+                            ? "매일"
+                            : t.kind === "once"
+                              ? "이번 주 최소 1회"
+                              : `주 ${t.plannedCount}회 이상`}{" "}
+                        · {done}회 실행
+                        {t.plannedCount
+                          ? ` / 최소 ${t.plannedCount}회`
+                          : " · 최소 약속 제외"}
                       </span>
                     </header>
                     <p>

@@ -77,6 +77,11 @@ import {
 } from "./PlanningWidgets.jsx";
 import DaySchedule from "./DaySchedule.jsx";
 import CurrentWeekPlan from "./CurrentWeekPlan.jsx";
+import WeekReplanning, { WeekReplanningHistory } from "./WeekReplanning.jsx";
+import {
+  stateForDay,
+  calendarWeekState,
+} from "../../shared/week-replanning.js";
 import DayTemplateSession, { DayTemplateLibrary } from "./DayTemplates.jsx";
 import LifeAttitude from "./LifeAttitude.jsx";
 import ExecutionPicker from "./ExecutionPicker.jsx";
@@ -2452,6 +2457,7 @@ function Execution(props) {
   );
 }
 function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
+  const [replanning, setReplanning] = useState(false);
   const [dayTemplateSession, setDayTemplateSession] = useState(null);
   const [dayTemplateDirty, setDayTemplateDirty] = useState(false);
   const [calendarImport, setCalendarImport] = useState(null);
@@ -2506,9 +2512,9 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
         JSON.stringify(modelWeekFor(cycle.plan, number)));
   useEffect(() => {
     if (number === reviewNumber) return;
-    onDirty(reviewDirty || modelDirty || dayTemplateDirty);
+    onDirty(reviewDirty || modelDirty || dayTemplateDirty || replanning);
     return () => onDirty(false);
-  }, [reviewDirty, modelDirty, dayTemplateDirty, number]);
+  }, [reviewDirty, modelDirty, dayTemplateDirty, replanning, number]);
   const chooseWeek = (n) => {
     if (
       (reviewDirty || reflectionDirty || modelDirty) &&
@@ -2782,6 +2788,9 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
     });
     return { ok: !!result, error };
   };
+  const dayState = week ? stateForDay(week.state, day) : null;
+  const historicalDay = !!week && dayState !== week.state;
+  const calendarState = week ? calendarWeekState(week.state) : null;
   const calendarBlocks = week
     ? [
         ...timetableForWeek(cycle.plan, number).map((b) => ({
@@ -2789,12 +2798,14 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
           id: `model-${b.sourceWeek}-${b.id}`,
           background: true,
         })),
-        ...week.state.occurrences.filter(hasScheduledTime).map((o) => ({
+        ...calendarState.occurrences.filter(hasScheduledTime).map((o) => ({
           ...o,
           day: week.daily.findIndex((d) => d.date === o.date),
           kind: "actual",
-          title: week.state.tactics.find((t) => t.id === o.tacticId).title,
-          locked: o.completed,
+          title: calendarState.tactics.find((t) => t.id === o.tacticId).title,
+          locked:
+            o.completed ||
+            !week.state.occurrences.some((item) => item.id === o.id),
         })),
       ]
     : [];
@@ -3115,7 +3126,10 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
               <article className="main-stat">
                 <div>
                   <small>
-                    WEEK {String(number).padStart(2, "0")} · 주간 실행 점수
+                    WEEK {String(number).padStart(2, "0")} ·{" "}
+                    {week.state.replans?.length
+                      ? "재정립 후 실행 점수"
+                      : "주간 실행 점수"}
                   </small>
                   <strong>{percentage(week.score.score)}</strong>
                 </div>
@@ -3132,7 +3146,11 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                 </div>
               </article>
               <article>
-                <small>이번 주 실제 실행 / 최소 약속</small>
+                <small>
+                  {week.state.replans?.length
+                    ? "재정립 후 실제 실행 / 최소 약속"
+                    : "이번 주 실제 실행 / 최소 약속"}
+                </small>
                 <strong>
                   {week.state.occurrences.filter((o) => o.completed).length}
                   <em>
@@ -3197,6 +3215,63 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
               주간 평가 · 30분
             </button>
           </div>
+          {cycle.status === "active" &&
+            week.start <= week.today &&
+            week.today <= addDays(week.start, 6) && (
+              <div className="replan-buttons">
+                <Button
+                  variant="outlined"
+                  disabled={busy || modelDirty || dayTemplateDirty}
+                  onClick={() => setReplanning(true)}
+                >
+                  주간 계획 재정립
+                </Button>
+                <span className="muted">
+                  생활 조건이 크게 바뀌었다면 남은 약속을 다시 정하세요.
+                  {modelDirty
+                    ? " 시간표 변경을 먼저 저장하거나 취소해주세요."
+                    : ""}
+                </span>
+              </div>
+            )}
+          <WeekReplanningHistory week={week} />
+          {replanning && (
+            <WeekReplanning
+              Modal={Modal}
+              week={week}
+              referenceGoals={cycle.plan.goals}
+              busy={busy}
+              onClose={() => setReplanning(false)}
+              onSave={async (input) => {
+                let error;
+                await run(async () => {
+                  try {
+                    const updated = await api(`${prefix}/replan`, {
+                      method: "POST",
+                      body: {
+                        ...input,
+                        version: week.version,
+                        cycleVersion: cycle.version,
+                      },
+                    });
+                    apply(updated);
+                    scheduleHistory.current = { undo: [], redo: [] };
+                    updateScheduleHistory((v) => v + 1);
+                    setSchedule(null);
+                    setPlacement(null);
+                    setReplanning(false);
+                    notify(
+                      "원래 기록을 보존하고 남은 주간 계획을 재정립했어요.",
+                    );
+                  } catch (failure) {
+                    error = failure.message;
+                    throw failure;
+                  }
+                });
+                return error ? { error } : { ok: true };
+              }}
+            />
+          )}
           {(!modelEdit || mode === "plan") && (
             <LifeAttitude plan={cycle.plan} />
           )}
@@ -3264,6 +3339,12 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   </button>
                 ))}
               </div>
+              {historicalDay && (
+                <p className="info-note">
+                  재정립 이전 평가일의 기록입니다. 당시 계획과 점수를 읽기
+                  전용으로 보여줍니다.
+                </p>
+              )}
               <DaySchedule
                 onEditModel={canEditModel ? editWeekModel : undefined}
                 blocks={calendarBlocks}
@@ -3271,10 +3352,10 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                 timetableSource={timetableSource}
                 day={week.daily.findIndex((d) => d.date === day)}
                 date={day}
-                readonly={busy || cycle.status === "complete"}
+                readonly={busy || historicalDay || cycle.status === "complete"}
                 onCreate={(change) => setPlacement({ ...change, date: day })}
                 onEdit={(o) =>
-                  setSchedule(week.state.occurrences.find((x) => x.id === o.id))
+                  setSchedule(dayState.occurrences.find((x) => x.id === o.id))
                 }
                 canUndo={scheduleHistory.current.undo.length > 0}
                 canRedo={scheduleHistory.current.redo.length > 0}
@@ -3284,13 +3365,13 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   canEditModel
                     ? (block) =>
                         unplaceExecution(
-                          week.state.occurrences.find((o) => o.id === block.id),
+                          dayState.occurrences.find((o) => o.id === block.id),
                         )
                     : undefined
                 }
                 onMove={(block, change) =>
                   changeSchedule(
-                    week.state.occurrences.find((o) => o.id === block.id),
+                    dayState.occurrences.find((o) => o.id === block.id),
                     {
                       date: week.daily[change.day].date,
                       time: change.time,
@@ -3301,11 +3382,10 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                 }
                 onResize={(block, change) =>
                   changeSchedule(
-                    week.state.occurrences.find((o) => o.id === block.id),
+                    dayState.occurrences.find((o) => o.id === block.id),
                     {
-                      date: week.state.occurrences.find(
-                        (o) => o.id === block.id,
-                      ).date,
+                      date: dayState.occurrences.find((o) => o.id === block.id)
+                        .date,
                       ...change,
                     },
                     "실행 시간의 길이를 조절했어요.",
@@ -3329,7 +3409,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                   </span>
                 </header>
                 <div className="task-list">
-                  {week.state.occurrences
+                  {dayState.occurrences
                     .filter((o) => o.date === day)
                     .sort(
                       (a, b) =>
@@ -3338,7 +3418,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                         a.time.localeCompare(b.time),
                     )
                     .map((o) => {
-                      const t = week.state.tactics.find(
+                      const t = dayState.tactics.find(
                         (t) => t.id === o.tacticId,
                       );
                       return (
@@ -3352,6 +3432,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                             aria-pressed={o.completed}
                             disabled={
                               busy ||
+                              historicalDay ||
                               cycle.status === "complete" ||
                               o.date > today
                             }
@@ -3385,7 +3466,11 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                               <button
                                 type="button"
                                 className="text-button"
-                                disabled={busy || cycle.status === "complete"}
+                                disabled={
+                                  busy ||
+                                  historicalDay ||
+                                  cycle.status === "complete"
+                                }
                                 aria-label={`${t.title} 독서 기록`}
                                 onClick={() =>
                                   setReading({
@@ -3404,7 +3489,10 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                             className="icon-button"
                             aria-label={`${t.title} 일정 변경`}
                             disabled={
-                              o.completed || cycle.status === "complete"
+                              busy ||
+                              historicalDay ||
+                              o.completed ||
+                              cycle.status === "complete"
                             }
                             onClick={() => setSchedule(o)}
                           >
@@ -3413,7 +3501,7 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
                         </div>
                       );
                     })}
-                  {!week.state.occurrences.some((o) => o.date === day) && (
+                  {!dayState.occurrences.some((o) => o.date === day) && (
                     <div className="empty-inline">
                       <Sprout size={25} />
                       <p>이날 배치한 실행이 없어요.</p>
@@ -3537,7 +3625,11 @@ function ExecutionContent({ cycle, setCycle, run, busy, notify, onDirty }) {
               <section className="panel">
                 <header className="section-heading">
                   <div>
-                    <h2>전술별 주간 점수표</h2>
+                    <h2>
+                      {week.state.replans?.length
+                        ? "재정립 이후 전술별 점수표"
+                        : "전술별 주간 점수표"}
+                    </h2>
                     <p className="muted">
                       각 전술의 실행률 × 동일한 비중. 일간 점수의 평균이
                       아닙니다.
@@ -4051,7 +4143,14 @@ function RestWeek({ cycle, setCycle, run, busy, notify, onDirty }) {
                 {w.score.score === null ? "—" : Math.round(w.score.score)}
               </span>
               <i style={{ height: `${Math.max(3, w.score.score || 0)}px` }} />
-              <small>{w.number}주</small>
+              <small>
+                {w.number}주{w.state.replans?.length ? " · 재정립" : ""}
+              </small>
+              {w.state.replans?.length > 0 && (
+                <small>
+                  원안 당시 {percentage(w.state.replans[0].score.score)}
+                </small>
+              )}
             </div>
           ))}
         </div>

@@ -108,6 +108,184 @@ async function setup(page, request, name, customize = () => {}) {
   };
   return { getWeek, getCycle, updatePlan };
 }
+for (const width of [1280, 390]) {
+  test(`weekly replanning preserves history and persists only the new remaining promises at ${width}px`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { getWeek } = await setup(page, request, `주간 재정립 ${width}`);
+    const before = await getWeek();
+    await page
+      .getByRole("button", { name: "이번 주 계획표", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "주간 계획 재정립", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "주간 계획 재정립" });
+    await dialog
+      .getByLabel("무엇이 바뀌었나요?")
+      .fill("학원 고정 근무가 시작되어 남은 약속을 줄인다.");
+    await dialog
+      .getByRole("button", { name: "모두 제외", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "새 약속 추가", exact: true })
+      .click();
+    await dialog.getByLabel("새 약속 1 행동").fill("퇴근 후 짧게 기록");
+    await dialog
+      .getByLabel("새 약속 1 완료 기준")
+      .fill("수업에서 발견한 점 한 줄");
+    await dialog.getByLabel("새 약속 1 최소 횟수").fill("2");
+    await dialog
+      .getByRole("button", { name: "변경 내용 확인", exact: true })
+      .click();
+    await expect(
+      dialog.getByText("변경 내용 확인", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `test-results/replanning-preview-${width}.png`,
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await dialog
+      .getByRole("button", { name: "확인하고 재정립 저장", exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    const history = page.getByRole("region", { name: "주간 재정립 이력" });
+    await expect(history).toContainText("원안 진행률 0%");
+    const after = await getWeek();
+    expect(after.state.replans[0].snapshot).toEqual(before.state);
+    expect(after.state.occurrences).toHaveLength(2);
+    expect(after.state.tactics[0].plannedCount).toBe(2);
+    await page.reload();
+    await expect(
+      page.getByRole("region", { name: "주간 재정립 이력" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "퇴근 후 짧게 기록", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("region", { name: "주간 재정립 이력" })
+      .locator("summary")
+      .first()
+      .click();
+    await expect(page.locator(".replan-archive")).toContainText(
+      "재정립으로 제외",
+    );
+  });
+}
+
+test("pre-replanning daily records retain their score and are read-only", async ({
+  page,
+  request,
+}) => {
+  const { getWeek, getCycle } = await setup(
+    page,
+    request,
+    "재정립 전 일간 기록",
+  );
+  const cycle = await getCycle();
+  const token = await page.evaluate(() => localStorage.getItem("twelve.token"));
+  const headers = { Authorization: `Bearer ${token}` };
+  const base = `http://127.0.0.1:4111/api/cycles/${cycle.id}/weeks/1`;
+  let week = await getWeek();
+  const occurrenceId = week.state.occurrences[0].id;
+  week = await (
+    await request.put(`${base}/occurrences/${occurrenceId}/schedule`, {
+      headers,
+      data: {
+        version: week.version,
+        date: "2026-10-05",
+        time: "10:00",
+        minutes: 60,
+      },
+    })
+  ).json();
+  week = await (
+    await request.put(`${base}/occurrences/${occurrenceId}/completion`, {
+      headers,
+      data: {
+        version: week.version,
+        completed: true,
+        executedAt: "2026-10-05T10:30:00+09:00",
+      },
+    })
+  ).json();
+  const saved = await request.post(`${base}/replan`, {
+    headers,
+    data: {
+      version: week.version,
+      cycleVersion: cycle.version,
+      effectiveDate: "2026-10-07",
+      reason: "work",
+      note: "남은 기간 새 계획",
+      keepIds: [],
+      additions: [],
+      confirmed: true,
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  expect((await getWeek()).daily[0].score).toBe(50);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "일간 실행 · 10분", exact: true })
+    .click();
+  await page.locator(".day-strip button").first().click();
+  await expect(
+    page.getByText("재정립 이전 평가일의 기록입니다.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "학습 결과 정리 완료 취소", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "일일 기록 일정 변경", exact: true }),
+  ).toBeDisabled();
+});
+
+test("replanning rejects concurrent edits and retains the user's unsaved proposal", async ({
+  page,
+  request,
+}) => {
+  const { getWeek, getCycle } = await setup(page, request, "재정립 동시 수정");
+  await page
+    .getByRole("button", { name: "주간 계획 재정립", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "주간 계획 재정립" });
+  await dialog.getByLabel("무엇이 바뀌었나요?").fill("바뀐 근무에 맞추기");
+  const week = await getWeek();
+  const cycle = await getCycle();
+  const token = await page.evaluate(() => localStorage.getItem("twelve.token"));
+  const changed = await request.put(
+    `http://127.0.0.1:4111/api/cycles/${cycle.id}/weeks/1/occurrences/${week.state.occurrences[0].id}/schedule`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        version: week.version,
+        date: "2026-10-07",
+        time: "18:00",
+        minutes: 60,
+      },
+    },
+  );
+  expect(changed.ok()).toBe(true);
+  await dialog
+    .getByRole("button", { name: "변경 내용 확인", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "확인하고 재정립 저장", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "다른 화면에서 내용이 변경",
+  );
+  await expect(dialog).toBeVisible();
+  expect((await getWeek()).state.replans).toBeUndefined();
+});
+
 async function dragHandle(page, handle, delta, cancel = false) {
   await handle.scrollIntoViewIfNeeded();
   const box = await handle.boundingBox();
