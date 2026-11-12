@@ -5,6 +5,7 @@ import { rateLimit } from "express-rate-limit";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
 import { transaction } from "./db.js";
+import { isDatabaseUnavailable } from "./database-errors.js";
 import {
   cycleInput,
   scheduleInput,
@@ -74,6 +75,7 @@ export function createApp({
   codex = null,
   aiEnv = process.env,
   calendarProvider,
+  isReady = () => true,
 }) {
   const app = express();
   app.disable("x-powered-by");
@@ -87,8 +89,28 @@ export function createApp({
     }),
   );
   app.use(express.json({ limit: "1mb" }));
+  const starting = (res) =>
+    res.status(503).set("Retry-After", "5").json({
+      ok: false,
+      code: "DATABASE_STARTING",
+      error: "저장소에 연결하고 있어요. 잠시 후 다시 시도해주세요.",
+    });
+  app.get("/api/live", (req, res) => {
+    // Initial migrations must finish before Render may mark a deployment live.
+    // After that, temporary DB downtime must not restart a healthy API process.
+    if (!isReady()) return starting(res);
+    const commit = process.env.RENDER_GIT_COMMIT;
+    res.set("Cache-Control", "no-store").json({
+      ok: true,
+      service: "twelve-week",
+      time: now().toISOString(),
+      ...(/^[a-f0-9]{40}$/.test(commit || "") ? { commit } : {}),
+    });
+  });
   app.get("/api/health", async (req, res) => {
+    if (!isReady()) return starting(res);
     await pool.query("SELECT 1");
+    res.set("Cache-Control", "no-store");
     res.json({
       ok: true,
       service: "twelve-week",
@@ -102,6 +124,10 @@ export function createApp({
       .set("Cache-Control", "no-store")
       .json({ required: false, authentication: "password" }),
   );
+  app.use("/api", (req, res, next) => {
+    if (!isReady()) return starting(res);
+    next();
+  });
   if (rateLimits)
     app.use(
       "/api/profiles",
@@ -801,6 +827,21 @@ export function createApp({
     res.status(404).json({ error: "요청한 기능을 찾을 수 없어요." }),
   );
   app.use((error, req, res, next) => {
+    if (
+      isDatabaseUnavailable(error) ||
+      ["57014", "55P03"].includes(error.code)
+    ) {
+      console.error(
+        "[database request unavailable]",
+        error.code || "CONNECTION_UNAVAILABLE",
+      );
+      return res.status(503).set("Retry-After", "5").json({
+        ok: false,
+        code: "DATABASE_UNAVAILABLE",
+        error:
+          "저장소에 잠시 연결할 수 없어요. 저장 중이었다면 연결이 복구된 뒤 반영 여부를 확인해주세요.",
+      });
+    }
     if (error instanceof z.ZodError)
       return res.status(400).json({
         error: "입력 내용을 확인해주세요.",

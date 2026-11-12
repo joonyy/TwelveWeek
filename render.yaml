@@ -9,7 +9,7 @@ services:
     plan: free
     buildCommand: npm ci --omit=dev
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/live
     envVars:
       - key: NODE_VERSION
         value: "22"
