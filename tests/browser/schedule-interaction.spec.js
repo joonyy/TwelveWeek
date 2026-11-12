@@ -1429,11 +1429,25 @@ test("choose work, strategy, buffer and rest blocks before drawing and retain th
     name: "수요일 10:00 블록 추가",
     exact: true,
   });
-  await from.scrollIntoViewIfNeeded();
+  const scroller = calendar.locator(".calendar-scroll");
+  await scroller.scrollIntoViewIfNeeded();
+  // Keep both endpoints away from the auto-scroll edge. Scrolling only the
+  // start slot into view can leave 11:30 beyond the grid's visible bottom,
+  // turning this 90-minute selection into an intentional edge-scroll gesture.
+  await from.evaluate((element) => {
+    const scroller = element.closest(".calendar-scroll");
+    scroller.scrollTop +=
+      element.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top -
+      100;
+  });
   const a = await from.boundingBox(),
     b = await calendar
       .getByRole("button", { name: "수요일 11:30 블록 추가", exact: true })
       .boundingBox();
+  const grid = await scroller.boundingBox();
+  expect(a.y).toBeGreaterThan(grid.y + 48);
+  expect(b.y).toBeLessThan(Math.min(grid.y + grid.height, 1200) - 48);
   await page.mouse.move(a.x + a.width / 2, a.y + 2);
   await page.mouse.down();
   await page.mouse.move(b.x + b.width / 2, b.y + 2, { steps: 6 });
