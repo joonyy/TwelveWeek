@@ -1,5 +1,62 @@
 import { test, expect } from "@playwright/test";
 
+test("slow vision polling stays single-flight and ignores results after the panel closes", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto("/");
+  await page.getByLabel("새 유저 이름").fill("폴링 지연 사용자");
+  await page.getByLabel("새 유저 비밀번호").fill("test-password");
+  await page.getByRole("button", { name: "나의 공간 만들기" }).click();
+  await page.getByRole("button", { name: "첫 12주 작성하기" }).click();
+  await page.getByRole("button", { name: "비전부터 작성하기" }).click();
+  await page.getByRole("button", { name: "AI와 비전 다듬기" }).click();
+  await expect(
+    page.getByRole("button", { name: "질문 하나로 시작하기" }),
+  ).toBeEnabled();
+  let pending = 0,
+    maximum = 0,
+    polls = 0,
+    lateCycleReads = 0,
+    release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/ai/cycles/*/context", async (route) => {
+    polls++;
+    pending++;
+    maximum = Math.max(maximum, pending);
+    const response = await route.fetch();
+    const context = await response.json();
+    await held;
+    pending--;
+    await route.fulfill({
+      response,
+      json: { ...context, version: context.version + 1 },
+    });
+  });
+  await page.clock.runFor(5000);
+  await expect.poll(() => polls).toBe(1);
+  await page.clock.runFor(25000);
+  expect(polls).toBe(1);
+  expect(maximum).toBe(1);
+  page.on("request", (req) => {
+    if (/\/api\/cycles\/[^/]+$/.test(new URL(req.url()).pathname))
+      lateCycleReads++;
+  });
+  await page.getByRole("button", { name: "AI 대화창 접기" }).click();
+  const finished = page.waitForResponse("**/api/ai/cycles/*/context");
+  release();
+  await (await finished).finished();
+  await expect.poll(() => pending).toBe(0);
+  await page.clock.runFor(10000);
+  expect(polls).toBe(1);
+  expect(lateCycleReads).toBe(0);
+  await expect(
+    page.getByRole("button", { name: "AI와 비전 다듬기" }),
+  ).toBeVisible();
+});
+
 test("vision partner imports, resumes, asks, edits with permission and undoes on mobile", async ({
   page,
 }, testInfo) => {

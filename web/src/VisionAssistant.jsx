@@ -101,30 +101,41 @@ export function VisionAssistant({ cycle, dirty, onSave, onRemote }) {
   }, []);
   useEffect(() => {
     if (!open) return;
+    let checking = false,
+      cancelled = false;
     void perform(refresh);
     const timer = setInterval(async () => {
       if (
+        cancelled ||
         document.visibilityState === "hidden" ||
         sending.current ||
-        pendingCount.current
+        pendingCount.current ||
+        checking
       )
         return;
+      checking = true;
       try {
         const ctx = await api(`${prefix}/context`);
-        if (!alive.current) return;
+        if (cancelled || !alive.current) return;
         setContext(ctx);
         if (ctx.version > cycleSnapshot.current.version) {
           const fresh = await api(`/cycles/${cycle.id}`);
-          if (alive.current) {
+          if (!cancelled && alive.current) {
             remote.current(fresh);
-            setEdits(await api(`${prefix}/edits`));
+            const history = await api(`${prefix}/edits`);
+            if (!cancelled && alive.current) setEdits(history);
           }
         }
       } catch {
         /* Explicit actions show connection errors; background polling stays quiet. */
+      } finally {
+        checking = false;
       }
     }, 5000);
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, [open, cycle.id]);
   useEffect(() => {
     const log = end.current?.parentElement;

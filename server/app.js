@@ -5,7 +5,8 @@ import { rateLimit } from "express-rate-limit";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
 import { transaction } from "./db.js";
-import { isDatabaseUnavailable } from "./database-errors.js";
+import { databaseErrorCode, isDatabaseUnavailable } from "./database-errors.js";
+import { createReadinessProbe } from "./database-readiness.js";
 import {
   cycleInput,
   scheduleInput,
@@ -76,8 +77,11 @@ export function createApp({
   aiEnv = process.env,
   calendarProvider,
   isReady = () => true,
+  readinessProbe = createReadinessProbe(pool),
+  diagnostics = null,
 }) {
   const app = express();
+  if (diagnostics) app.use(diagnostics.middleware);
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
   app.use(helmet());
@@ -109,7 +113,7 @@ export function createApp({
   });
   app.get("/api/health", async (req, res) => {
     if (!isReady()) return starting(res);
-    await pool.query("SELECT 1");
+    await readinessProbe();
     res.set("Cache-Control", "no-store");
     res.json({
       ok: true,
@@ -831,10 +835,17 @@ export function createApp({
       isDatabaseUnavailable(error) ||
       ["57014", "55P03"].includes(error.code)
     ) {
-      console.error(
-        "[database request unavailable]",
-        error.code || "CONNECTION_UNAVAILABLE",
-      );
+      const code = databaseErrorCode(error);
+      if (diagnostics) {
+        diagnostics.record("database_request_unavailable", {
+          code,
+          method: req.method,
+          route:
+            typeof req.route?.path === "string" ? req.route.path : "unmatched",
+        });
+      } else {
+        console.error("[database request unavailable]", code);
+      }
       return res.status(503).set("Retry-After", "5").json({
         ok: false,
         code: "DATABASE_UNAVAILABLE",

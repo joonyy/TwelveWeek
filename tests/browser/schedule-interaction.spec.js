@@ -1136,7 +1136,15 @@ test("daily circular placement shares weekly edits, future removal and Sunday re
       exact: true,
     })
     .dblclick();
+  const unplaced = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      /\/weeks\/2\/occurrences\/[^/]+\/schedule$/.test(
+        new URL(response.url()).pathname,
+      ),
+  );
   await page.getByRole("button", { name: "배치 해제", exact: true }).click();
+  expect((await unplaced).ok()).toBe(true);
   await expect(
     wheel.getByRole("button", { name: /학습 결과 정리.*일정 선택/ }),
   ).toHaveCount(0);
@@ -2189,9 +2197,15 @@ test("current week plan edits in place and copies a regular block to a chosen ti
       (b) => b.title === "모범 집중 블록",
     ),
   ).toHaveLength(1);
+  const savedResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      /\/api\/cycles\/[^/]+$/.test(new URL(response.url()).pathname),
+  );
   await editor
     .getByRole("button", { name: "이번 주 시간표 저장", exact: true })
     .click();
+  expect((await savedResponse).ok()).toBe(true);
   await expect(editor).toBeVisible();
   const saved = await getCycle();
   expect(
