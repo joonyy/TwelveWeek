@@ -14,14 +14,24 @@ const temporaryPostgresCodes = new Set([
   "57P03", // shutdown, crash, or starting up
 ]);
 
+const connectionMessages = new Map([
+  ["Connection terminated", "CONNECTION_CLOSED"],
+  ["Connection terminated unexpectedly", "CONNECTION_CLOSED"],
+  ["Connection terminated due to connection timeout", "CONNECTION_TIMEOUT"],
+  ["timeout exceeded when trying to connect", "POOL_ACQUIRE_TIMEOUT"],
+  ["Query read timeout", "QUERY_TIMEOUT"],
+  [
+    "Client has encountered a connection error and is not queryable",
+    "CLIENT_UNUSABLE",
+  ],
+]);
+
 export function isDatabaseUnavailable(error) {
   return (
     networkCodes.has(error?.code) ||
     temporaryPostgresCodes.has(error?.code) ||
     /^08[0-9A-Z]{3}$/.test(error?.code || "") ||
-    /^(Connection terminated(?: unexpectedly| due to connection timeout)?|timeout exceeded when trying to connect|Query read timeout|Client has encountered a connection error and is not queryable)$/.test(
-      error?.message || "",
-    )
+    connectionMessages.has(error?.message)
   );
 }
 
@@ -30,6 +40,6 @@ export function databaseErrorCode(error) {
   return /^[A-Z0-9_]{2,32}$/.test(error?.code || "")
     ? error.code
     : isDatabaseUnavailable(error)
-      ? "CONNECTION_UNAVAILABLE"
+      ? connectionMessages.get(error?.message) || "CONNECTION_UNAVAILABLE"
       : "DATABASE_ERROR";
 }
